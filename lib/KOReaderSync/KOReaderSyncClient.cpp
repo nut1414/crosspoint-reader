@@ -154,6 +154,7 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
 
   LOG_DBG("KOSync", "Get progress response: %d (err: %d)", httpCode, err);
 
+  if (httpCode == 503) return NOT_FOUND;  // Treat 503 as not found to handle cases where server doesn't support progress endpoint as 404
   if (err != ESP_OK) return NETWORK_ERROR;
 
   if (httpCode == 200 && buf.data) {
@@ -178,7 +179,6 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
 
   if (httpCode == 401) return AUTH_FAILED;
   if (httpCode == 404) return NOT_FOUND;
-  if (httpCode == 503) return NOT_FOUND;  // Treat 503 as not found to handle cases where server doesn't support progress endpoint as 404
   return SERVER_ERROR;
 }
 
