@@ -14,15 +14,39 @@
 #include "KOReaderCredentialStore.h"
 #include "activities/settings/SettingsActivity.h"
 
+inline uint8_t builtinFontFamilyFromVisibleIndex(uint8_t index) {
+  switch (index) {
+    case 1:
+      return CrossPointSettings::NOTOSANS;
+    case 2:
+      return CrossPointSettings::NOTOSERIF;
+    case 0:
+    default:
+      return CrossPointSettings::BOOKERLY;
+  }
+}
+
+inline uint8_t visibleIndexFromBuiltinFontFamily(uint8_t fontFamily) {
+  switch (fontFamily) {
+    case CrossPointSettings::NOTOSANS:
+      return 1;
+    case CrossPointSettings::NOTOSERIF:
+      return 2;
+    case CrossPointSettings::BOOKERLY:
+    default:
+      return 0;
+  }
+}
+
 // Build the font family setting dynamically. When registry is non-null, SD card fonts
 // are appended after the built-in fonts. Otherwise only built-in fonts are listed.
 inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
   // Built-in font labels (StrId)
-  std::vector<StrId> enumValues = {StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS};
+  std::vector<StrId> enumValues = {StrId::STR_BOOKERLY, StrId::STR_NOTO_SANS, StrId::STR_NOTO_SERIF};
   // Runtime string labels for SD card fonts
   std::vector<std::string> enumStringValues;
 
-  // Reserve: first CrossPointSettings::BUILTIN_FONT_COUNT entries use StrId, rest use strings
+  // Reserve: first visible built-in font entries use StrId, rest use strings
   if (registry) {
     const auto& families = registry->getFamilies();
     enumStringValues.reserve(families.size());
@@ -39,8 +63,9 @@ inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
   // with all options when SD fonts are present.
   std::vector<std::string> allStringValues;
   if (sdFontCount > 0) {
-    allStringValues.push_back(I18N.get(StrId::STR_NOTO_SERIF));
+    allStringValues.push_back(I18N.get(StrId::STR_BOOKERLY));
     allStringValues.push_back(I18N.get(StrId::STR_NOTO_SANS));
+    allStringValues.push_back(I18N.get(StrId::STR_NOTO_SERIF));
     allStringValues.insert(allStringValues.end(), enumStringValues.begin(), enumStringValues.end());
   }
 
@@ -66,20 +91,20 @@ inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
     if (SETTINGS.sdFontFamilyName[0] != '\0') {
       for (int i = 0; i < static_cast<int>(sdFamilyNames.size()); i++) {
         if (sdFamilyNames[i] == SETTINGS.sdFontFamilyName) {
-          return static_cast<uint8_t>(CrossPointSettings::BUILTIN_FONT_COUNT + i);
+          return static_cast<uint8_t>(CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT + i);
         }
       }
       // SD font name not found in registry — fall through to built-in
     }
-    return SETTINGS.fontFamily < CrossPointSettings::BUILTIN_FONT_COUNT ? SETTINGS.fontFamily : 0;
+    return visibleIndexFromBuiltinFontFamily(SETTINGS.fontFamily);
   };
 
   s.valueSetter = [sdFamilyNames](uint8_t v) {
-    if (v < CrossPointSettings::BUILTIN_FONT_COUNT) {
-      SETTINGS.fontFamily = v;
+    if (v < CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT) {
+      SETTINGS.fontFamily = builtinFontFamilyFromVisibleIndex(v);
       SETTINGS.sdFontFamilyName[0] = '\0';
     } else {
-      int sdIdx = v - CrossPointSettings::BUILTIN_FONT_COUNT;
+      int sdIdx = v - CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT;
       if (sdIdx < static_cast<int>(sdFamilyNames.size())) {
         strncpy(SETTINGS.sdFontFamilyName, sdFamilyNames[sdIdx].c_str(), sizeof(SETTINGS.sdFontFamilyName) - 1);
         SETTINGS.sdFontFamilyName[sizeof(SETTINGS.sdFontFamilyName) - 1] = '\0';
@@ -132,8 +157,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         // --- Reader ---
         // Built-in font-family entry. Replaced per-call with a registry-aware
         // version when SD fonts are installed.
-        SettingInfo::Enum(StrId::STR_FONT_FAMILY, &CrossPointSettings::fontFamily,
-                          {StrId::STR_NOTO_SERIF, StrId::STR_NOTO_SANS}, "fontFamily", StrId::STR_CAT_READER),
+        buildFontFamilySetting(nullptr),
         SettingInfo::Enum(StrId::STR_FONT_SIZE, &CrossPointSettings::fontSize,
                           {StrId::STR_SMALL, StrId::STR_MEDIUM, StrId::STR_LARGE, StrId::STR_X_LARGE}, "fontSize",
                           StrId::STR_CAT_READER),

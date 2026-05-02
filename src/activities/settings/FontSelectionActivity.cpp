@@ -17,17 +17,29 @@
 namespace {
 constexpr const char* ELLIPSIS_UTF8 = "\xe2\x80\xa6";
 
+uint8_t visibleIndexFromBuiltinFontFamily(uint8_t fontFamily) {
+  switch (fontFamily) {
+    case CrossPointSettings::NOTOSANS:
+      return 1;
+    case CrossPointSettings::NOTOSERIF:
+      return 2;
+    case CrossPointSettings::BOOKERLY:
+    default:
+      return 0;
+  }
+}
+
 int findCurrentFontIndex(const SdCardFontRegistry* registry, const char* sdFontFamilyName, uint8_t fontFamily) {
   if (sdFontFamilyName[0] != '\0' && registry) {
     const auto& families = registry->getFamilies();
     for (int i = 0; i < static_cast<int>(families.size()); i++) {
       if (families[i].name == sdFontFamilyName) {
-        return CrossPointSettings::BUILTIN_FONT_COUNT + i;
+        return CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT + i;
       }
     }
   }
 
-  return fontFamily < CrossPointSettings::BUILTIN_FONT_COUNT ? fontFamily : 0;
+  return visibleIndexFromBuiltinFontFamily(fontFamily);
 }
 }  // namespace
 
@@ -50,15 +62,17 @@ void FontSelectionActivity::onEnter() {
   originalSdFontFamilyName_[sizeof(originalSdFontFamilyName_) - 1] = '\0';
 
   fonts_.clear();
-  fonts_.reserve(CrossPointSettings::BUILTIN_FONT_COUNT + (registry_ ? registry_->getFamilyCount() : 0));
+  fonts_.reserve(CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT + (registry_ ? registry_->getFamilyCount() : 0));
 
-  fonts_.push_back({I18N.get(StrId::STR_NOTO_SERIF), true, static_cast<uint8_t>(CrossPointSettings::NOTOSERIF)});
+  fonts_.push_back({I18N.get(StrId::STR_BOOKERLY), true, static_cast<uint8_t>(CrossPointSettings::BOOKERLY)});
   fonts_.push_back({I18N.get(StrId::STR_NOTO_SANS), true, static_cast<uint8_t>(CrossPointSettings::NOTOSANS)});
+  fonts_.push_back({I18N.get(StrId::STR_NOTO_SERIF), true, static_cast<uint8_t>(CrossPointSettings::NOTOSERIF)});
 
   if (registry_) {
     const auto& families = registry_->getFamilies();
     for (int i = 0; i < static_cast<int>(families.size()); i++) {
-      fonts_.push_back({families[i].name, false, static_cast<uint8_t>(CrossPointSettings::BUILTIN_FONT_COUNT + i)});
+      fonts_.push_back(
+          {families[i].name, false, static_cast<uint8_t>(CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT + i)});
     }
   }
 
@@ -90,7 +104,7 @@ void FontSelectionActivity::loop() {
         SETTINGS.fontFamily = font.settingIndex;
         SETTINGS.sdFontFamilyName[0] = '\0';
       } else if (registry_) {
-        const int sdIdx = font.settingIndex - CrossPointSettings::BUILTIN_FONT_COUNT;
+        const int sdIdx = font.settingIndex - CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT;
         const auto& families = registry_->getFamilies();
         if (sdIdx < static_cast<int>(families.size())) {
           strncpy(SETTINGS.sdFontFamilyName, families[sdIdx].name.c_str(), sizeof(SETTINGS.sdFontFamilyName) - 1);
@@ -130,11 +144,11 @@ void FontSelectionActivity::loop() {
 
 void FontSelectionActivity::handleSelection() {
   const auto& font = fonts_[selectedIndex_];
-  if (font.settingIndex < CrossPointSettings::BUILTIN_FONT_COUNT) {
+  if (font.isBuiltin) {
     SETTINGS.fontFamily = font.settingIndex;
     SETTINGS.sdFontFamilyName[0] = '\0';
   } else if (registry_) {
-    const int sdIdx = font.settingIndex - CrossPointSettings::BUILTIN_FONT_COUNT;
+    const int sdIdx = font.settingIndex - CrossPointSettings::VISIBLE_BUILTIN_FONT_COUNT;
     const auto& families = registry_->getFamilies();
     if (sdIdx < static_cast<int>(families.size())) {
       strncpy(SETTINGS.sdFontFamilyName, families[sdIdx].name.c_str(), sizeof(SETTINGS.sdFontFamilyName) - 1);

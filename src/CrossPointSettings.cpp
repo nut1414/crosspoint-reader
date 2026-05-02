@@ -197,12 +197,12 @@ bool CrossPointSettings::loadFromBinaryFile() {
     {
       uint8_t legacyFontFamily;
       serialization::readPod(inputFile, legacyFontFamily);
-      if (legacyFontFamily < BUILTIN_FONT_COUNT) {
-        fontFamily = legacyFontFamily;
-      } else if (legacyFontFamily == LEGACY_OPENDYSLEXIC) {
+      if (legacyFontFamily == LEGACY_OPENDYSLEXIC) {
         fontFamily = NOTOSERIF;
         strncpy(sdFontFamilyName, "OpenDyslexic", sizeof(sdFontFamilyName) - 1);
         sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
+      } else if (legacyFontFamily < BUILTIN_FONT_COUNT) {
+        fontFamily = legacyFontFamily;
       }
     }
     if (++settingsRead >= fileSettingsCount) break;
@@ -297,7 +297,7 @@ float CrossPointSettings::getReaderLineCompression() const {
   }
 
   switch (fontFamily) {
-    case NOTOSERIF:
+    case BOOKERLY:
     default:
       switch (lineSpacing) {
         case TIGHT:
@@ -317,6 +317,16 @@ float CrossPointSettings::getReaderLineCompression() const {
           return 0.95f;
         case WIDE:
           return 1.0f;
+      }
+    case NOTOSERIF:
+      switch (lineSpacing) {
+        case TIGHT:
+          return 0.95f;
+        case NORMAL:
+        default:
+          return 1.0f;
+        case WIDE:
+          return 1.1f;
       }
   }
 }
@@ -353,18 +363,18 @@ int CrossPointSettings::getReaderFontId() const {
   }
 
   switch (fontFamily) {
-    case NOTOSERIF:
+    case BOOKERLY:
     default:
       switch (fontSize) {
         case SMALL:
-          return NOTOSERIF_12_FONT_ID;
+          return BOOKERLY_12_FONT_ID;
         case MEDIUM:
         default:
-          return NOTOSERIF_14_FONT_ID;
+          return BOOKERLY_14_FONT_ID;
         case LARGE:
-          return NOTOSERIF_16_FONT_ID;
+          return BOOKERLY_16_FONT_ID;
         case EXTRA_LARGE:
-          return NOTOSERIF_18_FONT_ID;
+          return BOOKERLY_18_FONT_ID;
       }
     case NOTOSANS:
       switch (fontSize) {
@@ -377,6 +387,18 @@ int CrossPointSettings::getReaderFontId() const {
           return NOTOSANS_16_FONT_ID;
         case EXTRA_LARGE:
           return NOTOSANS_18_FONT_ID;
+      }
+    case NOTOSERIF:
+      switch (fontSize) {
+        case SMALL:
+          return NOTOSERIF_12_FONT_ID;
+        case MEDIUM:
+        default:
+          return NOTOSERIF_14_FONT_ID;
+        case LARGE:
+          return NOTOSERIF_16_FONT_ID;
+        case EXTRA_LARGE:
+          return NOTOSERIF_18_FONT_ID;
       }
   }
 }
