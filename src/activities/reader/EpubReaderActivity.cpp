@@ -1155,8 +1155,8 @@ void EpubReaderActivity::renderPreCacheProgress() {
     GUI.drawProgressBar(renderer, Rect{50, pageHeight / 2 + 10, pageWidth - 100, 20}, current, total);
     char pctBuf[32];
     const int pct = static_cast<int>(100.0f * static_cast<float>(current) / static_cast<float>(total));
-    snprintf(pctBuf, sizeof(pctBuf), "%d / %d (%d%%)", current, total, pct);
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 50, pctBuf);
+    snprintf(pctBuf, sizeof(pctBuf), "%d / %d", current, total);
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 70, pctBuf);
   }
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
