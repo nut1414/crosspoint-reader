@@ -5,6 +5,7 @@
 #include <Logging.h>
 #include <Serialization.h>
 
+#include <climits>
 #include <cstring>
 #include <string>
 
@@ -351,6 +352,8 @@ int CrossPointSettings::getRefreshFrequency() const {
       return 15;
     case REFRESH_30:
       return 30;
+    case REFRESH_NONE:
+      return INT32_MAX;
   }
 }
 
