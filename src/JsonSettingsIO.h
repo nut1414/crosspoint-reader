@@ -8,6 +8,7 @@ class WifiCredentialStore;
 class RecentBooksStore;
 class OpdsServerStore;
 struct BookmarkEntry;
+class WebDAVServerStore;
 
 namespace JsonSettingsIO {
 
@@ -34,5 +35,9 @@ bool loadOpds(OpdsServerStore& store, const char* json, bool* needsResave = null
 // Bookmarks
 bool saveBookmarks(const std::vector<BookmarkEntry>& bookmarks, const char* path);
 bool loadBookmarks(std::vector<BookmarkEntry>& bookmarks, const char* json);
+
+// WebDAVServerStore
+bool saveWebDAV(const WebDAVServerStore& store, const char* path);
+bool loadWebDAV(WebDAVServerStore& store, const char* json, bool* needsResave = nullptr);
 
 }  // namespace JsonSettingsIO

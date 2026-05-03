@@ -6,9 +6,11 @@
 #include <algorithm>
 
 #include "OpdsServerStore.h"
+#include "WebDAVServerStore.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
 #include "browser/OpdsBookBrowserActivity.h"
+#include "browser/WebDAVBrowserActivity.h"
 #include "home/CrashActivity.h"
 #include "home/FileBrowserActivity.h"
 #include "home/HomeActivity.h"
@@ -16,6 +18,7 @@
 #include "network/CrossPointWebServerActivity.h"
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
+#include "settings/WebDAVServerListActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/FullScreenMessageActivity.h"
 
@@ -193,6 +196,15 @@ void ActivityManager::goToBrowser() {
   }
 }
 
+void ActivityManager::goToWebDAVBrowser() {
+  const auto& servers = WEBDAV_STORE.getServers();
+  if (servers.size() == 1) {
+    replaceActivity(std::make_unique<WebDAVBrowserActivity>(renderer, mappedInput, servers[0]));
+  } else {
+    replaceActivity(std::make_unique<WebDAVServerListActivity>(renderer, mappedInput, true));
+  }
+}
+
 void ActivityManager::goToReader(std::string path) {
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path)));
 }
@@ -217,6 +229,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem) {
       initialMenuItem = HomeMenuItem::RECENTS;
     } else if (activityName == "OpdsBookBrowser") {
       initialMenuItem = HomeMenuItem::OPDS_BROWSER;
+    } else if (activityName == "WebDAVBrowser") {
+      initialMenuItem = HomeMenuItem::WEBDAV_BROWSER;
     } else if (activityName == "CrossPointWebServer") {
       initialMenuItem = HomeMenuItem::FILE_TRANSFER;
     } else if (activityName == "Settings") {

@@ -303,6 +303,8 @@
   <div id="wifi-container"></div>
   <div id="opds-container"></div>
 
+  <div id="webdav-container"></div>
+
   <div class="card">
     <p style="text-align: center; color: #95a5a6; margin: 0;">
       CrossPoint E-Reader • Open Source
@@ -827,6 +829,116 @@
 
   loadWifiNetworks();
   loadOpdsServers();
+
+  // --- WebDAV Server Management ---
+  let webdavServers = [];
+
+  function renderWebDAVServer(srv, idx) {
+    const isNew = idx === -1;
+    const id = isNew ? 'new' : idx;
+    return '<div class="opds-server" id="webdav-' + id + '">' +
+      '<div class="setting-row">' +
+        '<span class="setting-name">Server Name</span>' +
+        '<span class="setting-control"><input type="text" id="webdav-name-' + id + '" value="' + escapeHtml(srv.name || '') + '"></span>' +
+      '</div>' +
+      '<div class="setting-row">' +
+        '<span class="setting-name">URL</span>' +
+        '<span class="setting-control"><input type="text" id="webdav-url-' + id + '" value="' + escapeHtml(srv.url || '') + '"></span>' +
+      '</div>' +
+      '<div class="setting-row">' +
+        '<span class="setting-name">Username</span>' +
+        '<span class="setting-control"><input type="text" id="webdav-user-' + id + '" value="' + escapeHtml(srv.username || '') + '"></span>' +
+      '</div>' +
+      '<div class="setting-row">' +
+        '<span class="setting-name">Password</span>' +
+        '<span class="setting-control"><input type="password" id="webdav-pass-' + id + '" placeholder="' + (srv.hasPassword ? '(unchanged)' : '') + '"></span>' +
+      '</div>' +
+      '<div class="opds-actions">' +
+        '<button class="btn-small btn-save-server" onclick="saveWebDAVServer(' + idx + ')">Save</button>' +
+        (isNew ? '' : '<button class="btn-small btn-delete" onclick="deleteWebDAVServer(' + idx + ')">Delete</button>') +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderWebDAVSection() {
+    const container = document.getElementById('webdav-container');
+    let html = '<div class="card"><h2>WebDAV Servers</h2>';
+
+    if (webdavServers.length === 0) {
+      html += '<p style="color:var(--label-color);text-align:center;">No WebDAV servers configured</p>';
+    } else {
+      webdavServers.forEach(function(srv, idx) {
+        html += renderWebDAVServer(srv, idx);
+      });
+    }
+
+    html += '<div style="margin-top:12px;text-align:center;">' +
+      '<button class="btn-small btn-add" onclick="addWebDAVServer()">+ Add Server</button>' +
+    '</div></div>';
+    container.innerHTML = html;
+  }
+
+  async function loadWebDAVServers() {
+    try {
+      const resp = await fetch('/api/webdav');
+      if (!resp.ok) throw new Error('Failed to load');
+      webdavServers = await resp.json();
+      renderWebDAVSection();
+    } catch (e) {
+      console.error('WebDAV load error:', e);
+    }
+  }
+
+  function addWebDAVServer() {
+    const container = document.getElementById('webdav-container');
+    const card = container.querySelector('.card');
+    const addBtn = card.querySelector('.btn-add').parentElement;
+    if (document.getElementById('webdav-new')) return;
+    addBtn.insertAdjacentHTML('beforebegin', renderWebDAVServer({name:'',url:'',username:'',hasPassword:false}, -1));
+  }
+
+  async function saveWebDAVServer(idx) {
+    const id = idx === -1 ? 'new' : idx;
+    const data = {
+      name: document.getElementById('webdav-name-' + id).value,
+      url: document.getElementById('webdav-url-' + id).value,
+      username: document.getElementById('webdav-user-' + id).value,
+    };
+    const pass = document.getElementById('webdav-pass-' + id).value;
+    if (pass) data.password = pass;
+    if (idx >= 0) data.index = idx;
+
+    try {
+      const resp = await fetch('/api/webdav', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      showMessage('WebDAV server saved!', false);
+      await loadWebDAVServers();
+    } catch (e) {
+      showMessage('Error: ' + e.message, true);
+    }
+  }
+
+  async function deleteWebDAVServer(idx) {
+    if (!confirm('Delete this WebDAV server?')) return;
+    try {
+      const resp = await fetch('/api/webdav/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({index: idx})
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      showMessage('WebDAV server deleted', false);
+      await loadWebDAVServers();
+    } catch (e) {
+      showMessage('Error: ' + e.message, true);
+    }
+  }
+
+  loadWebDAVServers();
 </script>
 </body>
 </html>

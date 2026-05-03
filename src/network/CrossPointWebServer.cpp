@@ -17,6 +17,7 @@
 #include "SettingsList.h"
 #include "WebDAVHandler.h"
 #include "WifiCredentialStore.h"
+#include "WebDAVServerStore.h"
 #include "html/FilesPageHtml.generated.h"
 #include "html/FontsPageHtml.generated.h"
 #include "html/HomePageHtml.generated.h"
@@ -174,6 +175,11 @@ void CrossPointWebServer::begin() {
   server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiNetworks(); });
   server->on("/api/wifi", HTTP_POST, [this] { handlePostWifiNetwork(); });
   server->on("/api/wifi/delete", HTTP_POST, [this] { handleDeleteWifiNetwork(); });
+
+  // WebDAV server endpoints
+  server->on("/api/webdav", HTTP_GET, [this] { handleGetWebDAVServers(); });
+  server->on("/api/webdav", HTTP_POST, [this] { handlePostWebDAVServer(); });
+  server->on("/api/webdav/delete", HTTP_POST, [this] { handleDeleteWebDAVServer(); });
 
   server->onNotFound([this] { handleNotFound(); });
   LOG_DBG("WEB", "[MEM] Free heap after route setup: %d bytes", ESP.getFreeHeap());
@@ -1518,6 +1524,116 @@ void CrossPointWebServer::handleDeleteWifiNetwork() {
   }
 
   LOG_DBG("WEB", "Deleted Wi-Fi network at index %d (SSID: %s)", idx, ssid.c_str());
+  server->send(200, "text/plain", "OK");
+}
+
+// ---- WebDAV Server API ----
+
+void CrossPointWebServer::handleGetWebDAVServers() const {
+  const auto& servers = WEBDAV_STORE.getServers();
+
+  server->setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server->send(200, "application/json", "");
+  server->sendContent("[");
+
+  char output[512];
+  constexpr size_t outputSize = sizeof(output);
+  JsonDocument doc;
+
+  for (size_t i = 0; i < servers.size(); i++) {
+    doc.clear();
+    doc["index"] = i;
+    doc["name"] = servers[i].name;
+    doc["url"] = servers[i].url;
+    doc["username"] = servers[i].username;
+    doc["hasPassword"] = !servers[i].password.empty();
+
+    const size_t written = serializeJson(doc, output, outputSize);
+    if (written >= outputSize) continue;
+
+    if (i > 0) server->sendContent(",");
+    server->sendContent(output);
+  }
+
+  server->sendContent("]");
+  server->sendContent("");
+  LOG_DBG("WEB", "Served WebDAV servers API (%zu servers)", servers.size());
+}
+
+void CrossPointWebServer::handlePostWebDAVServer() {
+  if (!server->hasArg("plain")) {
+    server->send(400, "text/plain", "Missing JSON body");
+    return;
+  }
+
+  const String body = server->arg("plain");
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
+    return;
+  }
+
+  WebDAVServer webdavServer;
+  webdavServer.name = doc["name"] | std::string("");
+  webdavServer.url = doc["url"] | std::string("");
+  webdavServer.username = doc["username"] | std::string("");
+
+  bool hasPasswordField = doc["password"].is<const char*>() || doc["password"].is<std::string>();
+  std::string password = doc["password"] | std::string("");
+
+  if (doc["index"].is<int>()) {
+    int idx = doc["index"].as<int>();
+    if (idx < 0 || idx >= static_cast<int>(WEBDAV_STORE.getCount())) {
+      server->send(400, "text/plain", "Invalid server index");
+      return;
+    }
+    if (!hasPasswordField) {
+      const auto* existing = WEBDAV_STORE.getServer(static_cast<size_t>(idx));
+      if (existing) password = existing->password;
+    }
+    webdavServer.password = password;
+    WEBDAV_STORE.updateServer(static_cast<size_t>(idx), webdavServer);
+    LOG_DBG("WEB", "Updated WebDAV server at index %d", idx);
+  } else {
+    webdavServer.password = password;
+    if (!WEBDAV_STORE.addServer(webdavServer)) {
+      server->send(400, "text/plain", "Cannot add server (limit reached)");
+      return;
+    }
+    LOG_DBG("WEB", "Added new WebDAV server: %s", webdavServer.name.c_str());
+  }
+
+  server->send(200, "text/plain", "OK");
+}
+
+void CrossPointWebServer::handleDeleteWebDAVServer() {
+  if (!server->hasArg("plain")) {
+    server->send(400, "text/plain", "Missing JSON body");
+    return;
+  }
+
+  const String body = server->arg("plain");
+  JsonDocument doc;
+  const DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server->send(400, "text/plain", String("Invalid JSON: ") + err.c_str());
+    return;
+  }
+
+  if (!doc["index"].is<int>()) {
+    server->send(400, "text/plain", "Missing index");
+    return;
+  }
+
+  int idx = doc["index"].as<int>();
+  if (idx < 0 || idx >= static_cast<int>(WEBDAV_STORE.getCount())) {
+    server->send(400, "text/plain", "Invalid server index");
+    return;
+  }
+
+  WEBDAV_STORE.removeServer(static_cast<size_t>(idx));
+  LOG_DBG("WEB", "Deleted WebDAV server at index %d", idx);
   server->send(200, "text/plain", "OK");
 }
 

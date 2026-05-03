@@ -139,4 +139,9 @@ class CrossPointWebServer {
   void handleGetWifiNetworks() const;
   void handlePostWifiNetwork();
   void handleDeleteWifiNetwork();
+
+  // WebDAV server handlers
+  void handleGetWebDAVServers() const;
+  void handlePostWebDAVServer();
+  void handleDeleteWebDAVServer();
 };
