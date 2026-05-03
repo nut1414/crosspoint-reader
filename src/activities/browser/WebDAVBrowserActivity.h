@@ -34,6 +34,7 @@ class WebDAVBrowserActivity final : public Activity {
   int selectorIndex = 0;
   std::string errorMessage;
   std::string statusMessage;
+  bool truncated = false;
   size_t downloadProgress = 0;
   size_t downloadTotal = 0;
   std::string pendingDownloadUrl;

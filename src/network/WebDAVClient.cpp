@@ -4,7 +4,6 @@
 #include <Logging.h>
 #include <NetworkClient.h>
 #include <NetworkClientSecure.h>
-#include <StreamString.h>
 #include <XmlParserUtils.h>
 #include <base64.h>
 #include <expat.h>
@@ -61,89 +60,178 @@ std::string hrefToName(const std::string& href) {
   return (pos != std::string::npos) ? decoded.substr(pos + 1) : decoded;
 }
 
-// --- Expat-based PROPFIND parser ---
+// --- Expat-based streaming PROPFIND parser ---
 
-struct PropfindParserState {
+class PropfindParser final : public Print {
+ public:
+  PropfindParser();
+  ~PropfindParser();
+  size_t write(uint8_t c) override;
+  size_t write(const uint8_t* buffer, size_t size) override;
+  void flush();
+  bool error() const { return errorOccurred; }
+
   std::vector<WebDAVItem> items;
+  bool truncated = false;
+
+ private:
+  static constexpr size_t MAX_ITEMS = 200;
+  static void XMLCALL startElement(void*, const XML_Char*, const XML_Char**);
+  static void XMLCALL endElement(void*, const XML_Char*);
+  static void XMLCALL characterData(void*, const XML_Char*, int);
+
+  XML_Parser parser = nullptr;
   WebDAVItem current;
   std::string currentText;
-  bool inHref = false;
-  bool inResourceType = false;
-  bool inContentLength = false;
+  bool inHref = false, inResourceType = false, inContentLength = false;
   bool currentIsCollection = false;
-  bool skipFirst = true;  // Skip the first response (the directory itself)
-  bool firstResponseSeen = false;
-  bool errorOccured = false;
-  XML_Parser parser = nullptr;
+  bool firstResponseSeen = false, skipFirst = true;
+  bool errorOccurred = false;
 };
 
-void XMLCALL propfindStartElement(void* userData, const XML_Char* name, const XML_Char** /*atts*/) {
-  auto* state = static_cast<PropfindParserState*>(userData);
+PropfindParser::PropfindParser() {
+  parser = XML_ParserCreate(nullptr);
+  if (!parser) {
+    errorOccurred = true;
+    LOG_DBG("WEBDAV", "Couldn't allocate memory for parser");
+  } else {
+    items.reserve(MAX_ITEMS);
+  }
+}
+
+PropfindParser::~PropfindParser() { destroyXmlParser(parser); }
+
+size_t PropfindParser::write(uint8_t c) { return write(&c, 1); }
+
+size_t PropfindParser::write(const uint8_t* xmlData, size_t length) {
+  if (errorOccurred) return length;
+
+  XML_SetUserData(parser, this);
+  XML_SetElementHandler(parser, startElement, endElement);
+  XML_SetCharacterDataHandler(parser, characterData);
+
+  const char* currentPos = reinterpret_cast<const char*>(xmlData);
+  size_t remaining = length;
+  constexpr size_t chunkSize = 1024;
+
+  while (remaining > 0) {
+    void* const buf = XML_GetBuffer(parser, chunkSize);
+    if (!buf) {
+      errorOccurred = true;
+      LOG_DBG("WEBDAV", "Couldn't allocate memory for buffer");
+      destroyXmlParser(parser);
+      return length;
+    }
+
+    const size_t toRead = remaining < chunkSize ? remaining : chunkSize;
+    memcpy(buf, currentPos, toRead);
+
+    if (XML_ParseBuffer(parser, static_cast<int>(toRead), 0) == XML_STATUS_ERROR) {
+      errorOccurred = true;
+      LOG_DBG("WEBDAV", "Parse error at line %lu: %s", XML_GetCurrentLineNumber(parser),
+              XML_ErrorString(XML_GetErrorCode(parser)));
+      destroyXmlParser(parser);
+      return length;
+    }
+    currentPos += toRead;
+    remaining -= toRead;
+  }
+  return length;
+}
+
+void PropfindParser::flush() {
+  if (XML_Parse(parser, nullptr, 0, XML_TRUE) != XML_STATUS_OK) {
+    errorOccurred = true;
+    destroyXmlParser(parser);
+  }
+}
+
+void XMLCALL PropfindParser::startElement(void* userData, const XML_Char* name, const XML_Char** /*atts*/) {
+  auto* self = static_cast<PropfindParser*>(userData);
   const char* local = localName(name);
   if (strcmp(local, "response") == 0) {
-    if (!state->firstResponseSeen) {
-      state->firstResponseSeen = true;
-      state->skipFirst = true;
+    if (!self->firstResponseSeen) {
+      self->firstResponseSeen = true;
+      self->skipFirst = true;
     } else {
-      state->skipFirst = false;
+      self->skipFirst = false;
     }
-    state->current = WebDAVItem{};
-    state->currentIsCollection = false;
+    self->current = WebDAVItem{};
+    self->currentIsCollection = false;
   } else if (strcmp(local, "href") == 0) {
-    state->inHref = true;
-    state->currentText.clear();
+    self->inHref = true;
+    self->currentText.clear();
   } else if (strcmp(local, "resourcetype") == 0) {
-    state->inResourceType = true;
+    self->inResourceType = true;
   } else if (strcmp(local, "collection") == 0) {
-    if (state->inResourceType) {
-      state->currentIsCollection = true;
+    if (self->inResourceType) {
+      self->currentIsCollection = true;
     }
   } else if (strcmp(local, "getcontentlength") == 0) {
-    state->inContentLength = true;
-    state->currentText.clear();
+    self->inContentLength = true;
+    self->currentText.clear();
   }
 }
 
-void XMLCALL propfindEndElement(void* userData, const XML_Char* name) {
-  auto* state = static_cast<PropfindParserState*>(userData);
+void XMLCALL PropfindParser::endElement(void* userData, const XML_Char* name) {
+  auto* self = static_cast<PropfindParser*>(userData);
   const char* local = localName(name);
   if (strcmp(local, "response") == 0) {
-    if (!state->skipFirst && !state->current.href.empty()) {
-      state->current.isDirectory = state->currentIsCollection;
-      state->current.name = hrefToName(state->current.href);
-      if (state->current.name.empty()) {
-        // Fallback: if name is empty after decoding, use the raw href
-        state->current.name = state->current.href;
+    if (!self->skipFirst && !self->current.href.empty()) {
+      if (self->items.size() < MAX_ITEMS) {
+        self->current.isDirectory = self->currentIsCollection;
+        self->current.name = hrefToName(self->current.href);
+        if (self->current.name.empty()) {
+          self->current.name = self->current.href;
+        }
+        self->items.push_back(std::move(self->current));
+      } else {
+        self->truncated = true;
       }
-      state->items.push_back(state->current);
     }
   } else if (strcmp(local, "href") == 0) {
-    state->inHref = false;
-    if (!state->skipFirst) {
-      state->current.href = state->currentText;
+    self->inHref = false;
+    if (!self->skipFirst) {
+      self->current.href = self->currentText;
     }
   } else if (strcmp(local, "resourcetype") == 0) {
-    state->inResourceType = false;
+    self->inResourceType = false;
   } else if (strcmp(local, "getcontentlength") == 0) {
-    state->inContentLength = false;
-    if (!state->skipFirst) {
-      state->current.size = strtoull(state->currentText.c_str(), nullptr, 10);
+    self->inContentLength = false;
+    if (!self->skipFirst) {
+      self->current.size = strtoull(self->currentText.c_str(), nullptr, 10);
     }
   }
 }
 
-void XMLCALL propfindCharacterData(void* userData, const XML_Char* s, int len) {
-  auto* state = static_cast<PropfindParserState*>(userData);
-  if (state->inHref || state->inContentLength) {
-    state->currentText.append(s, len);
+void XMLCALL PropfindParser::characterData(void* userData, const XML_Char* s, int len) {
+  auto* self = static_cast<PropfindParser*>(userData);
+  if (self->inHref || self->inContentLength) {
+    self->currentText.append(s, len);
   }
 }
+
+class PropfindStream final : public Stream {
+ public:
+  explicit PropfindStream(PropfindParser& p) : parser(p) {}
+  int available() override { return 0; }
+  int peek() override { abort(); }
+  int read() override { abort(); }
+  size_t write(uint8_t c) override { return parser.write(c); }
+  size_t write(const uint8_t* b, size_t n) override { return parser.write(b, n); }
+  ~PropfindStream() override { parser.flush(); }
+
+ private:
+  PropfindParser& parser;
+};
 
 }  // namespace
 
 WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVItem>& out,
-                                   const std::string& username, const std::string& password) {
+                                   const std::string& username, const std::string& password,
+                                   bool* truncated) {
   out.clear();
+  if (truncated) *truncated = false;
 
   std::unique_ptr<NetworkClient> client;
   if (UrlUtils::isHttpsUrl(url)) {
@@ -187,45 +275,18 @@ WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVIte
     return WebDAVError::HTTP_ERROR;
   }
 
-  // Read the full response body
-  StreamString responseStream;
-  http.writeToStream(&responseStream);
+  PropfindParser parser;
+  {
+    PropfindStream stream{parser};
+    http.writeToStream(&stream);
+  }  // ~PropfindStream() calls parser.flush()
   http.end();
 
-  std::string xmlBody(responseStream.c_str(), responseStream.length());
-  responseStream.clear();  // free first copy before parser allocates buffers
-  if (xmlBody.empty()) {
-    LOG_ERR("WEBDAV", "PROPFIND returned empty body");
-    return WebDAVError::PARSE_ERROR;
-  }
-
-  // Parse XML with Expat
-  PropfindParserState state;
-  state.parser = XML_ParserCreate(nullptr);
-  if (!state.parser) {
-    LOG_ERR("WEBDAV", "Failed to create XML parser");
-    return WebDAVError::PARSE_ERROR;
-  }
-
-  XML_SetUserData(state.parser, &state);
-  XML_SetElementHandler(state.parser, propfindStartElement, propfindEndElement);
-  XML_SetCharacterDataHandler(state.parser, propfindCharacterData);
-
-  if (XML_Parse(state.parser, xmlBody.c_str(), static_cast<int>(xmlBody.size()), XML_TRUE) != XML_STATUS_OK) {
-    LOG_ERR("WEBDAV", "XML parse error at line %lu: %s", XML_GetCurrentLineNumber(state.parser),
-            XML_ErrorString(XML_GetErrorCode(state.parser)));
-    destroyXmlParser(state.parser);
-    return WebDAVError::PARSE_ERROR;
-  }
-
-  destroyXmlParser(state.parser);
-
-  if (state.errorOccured) {
-    return WebDAVError::PARSE_ERROR;
-  }
-
-  out = std::move(state.items);
-  LOG_DBG("WEBDAV", "PROPFIND returned %zu items", out.size());
+  if (parser.error()) return WebDAVError::PARSE_ERROR;
+  if (truncated) *truncated = parser.truncated;
+  out = std::move(parser.items);
+  LOG_DBG("WEBDAV", "PROPFIND %zu items%s", out.size(),
+          parser.truncated ? " (truncated at MAX_ITEMS)" : "");
   return WebDAVError::OK;
 }
 

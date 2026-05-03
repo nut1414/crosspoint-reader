@@ -21,6 +21,7 @@ void WebDAVBrowserActivity::onEnter() {
 
   state = BrowserState::CHECK_WIFI;
   items.clear();
+  truncated = false;
   navigationHistory.clear();
   currentUrl = server.url;
   selectorIndex = 0;
@@ -111,6 +112,14 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
   const char* headerTitle = server.name.empty() ? tr(STR_WEBDAV_BROWSER) : server.name.c_str();
   renderer.drawCenteredText(UI_12_FONT_ID, 15, headerTitle, true, EpdFontFamily::BOLD);
 
+  if (state == BrowserState::BROWSING && !items.empty()) {
+    const int totalPages = static_cast<int>((items.size() + PAGE_ITEMS - 1) / PAGE_ITEMS);
+    const int currentPage = (selectorIndex / PAGE_ITEMS) + 1;
+    char pageBuf[16];
+    snprintf(pageBuf, sizeof(pageBuf), "%d/%d", currentPage, totalPages);
+    renderer.drawText(UI_10_FONT_ID, pageWidth - 60, 15, pageBuf, true);
+  }
+
   if (state == BrowserState::CHECK_WIFI || state == BrowserState::LOADING) {
     renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2, statusMessage.c_str());
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
@@ -143,6 +152,11 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
   const char* confirmLabel =
       (!items.empty() && items[selectorIndex].isDirectory) ? tr(STR_OPEN) : tr(STR_DOWNLOAD);
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+
+  if (truncated) {
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight - 28, tr(STR_WEBDAV_TRUNCATED));
+  }
+
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (items.empty()) {
@@ -182,7 +196,7 @@ void WebDAVBrowserActivity::fetchDirectory(const std::string& url) {
   }
 
   LOG_DBG("WEBDAV", "Fetching directory: %s", url.c_str());
-  auto error = WebDAVClient::propfind(url, items, server.username, server.password);
+  auto error = WebDAVClient::propfind(url, items, server.username, server.password, &truncated);
 
   if (error != WebDAVError::OK) {
     state = BrowserState::ERROR;
@@ -218,6 +232,7 @@ void WebDAVBrowserActivity::navigateToItem(const WebDAVItem& item) {
   state = BrowserState::LOADING;
   statusMessage = tr(STR_LOADING);
   items.clear();
+  truncated = false;
   selectorIndex = 0;
   requestUpdate(true);
   fetchDirectory(currentUrl);
@@ -232,6 +247,7 @@ void WebDAVBrowserActivity::navigateBack() {
     state = BrowserState::LOADING;
     statusMessage = tr(STR_LOADING);
     items.clear();
+    truncated = false;
     selectorIndex = 0;
     requestUpdate();
     fetchDirectory(currentUrl);
