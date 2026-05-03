@@ -1079,6 +1079,16 @@ void EpubReaderActivity::preCacheStep(const uint16_t viewportWidth, const uint16
     return;
   }
 
+  // On the first step, also pre-bake the home screen cover thumbnail at the
+  // active theme's height so the Continue Reading card has zero decode delay.
+  // generateThumbBmp() short-circuits when the BMP already exists.
+  if (preCacheSpineIndex == 0) {
+    const int coverHeight = UITheme::getInstance().getMetrics().homeCoverHeight;
+    if (coverHeight > 0) {
+      epub->generateThumbBmp(coverHeight);
+    }
+  }
+
   Section sec(epub, preCacheSpineIndex, renderer);
   if (!sec.loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
                            SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
