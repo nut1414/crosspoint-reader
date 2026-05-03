@@ -267,6 +267,40 @@ void EpubReaderActivity::loop() {
     pendingReadFolderMove = false;
   }
 
+  if (isPreCaching) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      isPreCaching = false;
+      requestUpdate();
+      return;
+    }
+
+    const int spineCount = epub->getSpineItemsCount();
+    if (preCacheSpineIndex >= spineCount) {
+      isPreCaching = false;
+      requestUpdate();
+      return;
+    }
+
+    int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+    renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                     &orientedMarginLeft);
+    orientedMarginTop += SETTINGS.screenMargin;
+    orientedMarginLeft += SETTINGS.screenMargin;
+    orientedMarginRight += SETTINGS.screenMargin;
+    const uint8_t statusBarHeight = UITheme::getInstance().getStatusBarHeight();
+    orientedMarginBottom += std::max(SETTINGS.screenMargin, statusBarHeight);
+    const uint16_t viewportWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
+    const uint16_t viewportHeight = renderer.getScreenHeight() - orientedMarginTop - orientedMarginBottom;
+
+    {
+      RenderLock lock(*this);
+      preCacheStep(viewportWidth, viewportHeight, orientedMarginLeft, orientedMarginTop);
+    }
+    preCacheSpineIndex++;
+    requestUpdate();
+    return;
+  }
+
   if (automaticPageTurnActive) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
         mappedInput.wasReleased(MappedInputManager::Button::Back)) {
@@ -640,6 +674,27 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       requestUpdate();
       break;
     }
+    case EpubReaderMenuActivity::MenuAction::PRE_CACHE_IMAGES: {
+      if (SETTINGS.imageRendering != CrossPointSettings::IMAGES_DISPLAY) {
+        // No images are rendered in placeholder/suppress mode; nothing to pre-cache.
+        requestUpdate();
+        break;
+      }
+      {
+        RenderLock lock(*this);
+        if (section) {
+          // Preserve current reading position so render() can rebuild section after pre-cache.
+          cachedSpineIndex = currentSpineIndex;
+          cachedChapterTotalPageCount = section->pageCount;
+          nextPageNumber = section->currentPage;
+        }
+        section.reset();
+        isPreCaching = true;
+        preCacheSpineIndex = 0;
+      }
+      requestUpdate();
+      break;
+    }
     case EpubReaderMenuActivity::MenuAction::SYNC: {
       launchKOReaderSync();
       break;
@@ -799,6 +854,11 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     pendingSyncSaveError = false;
     GUI.drawPopup(renderer, tr(STR_SAVE_PROGRESS_FAILED));
   };
+
+  if (isPreCaching) {
+    renderPreCacheProgress();
+    return;
+  }
 
   // edge case handling for sub-zero spine index
   if (currentSpineIndex < 0) {
@@ -1008,6 +1068,78 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
                                      SETTINGS.imageRendering, SETTINGS.focusReadingEnabled)) {
     LOG_ERR("ERS", "Failed silent indexing for chapter: %d", nextSpineIndex);
   }
+}
+
+void EpubReaderActivity::preCacheStep(const uint16_t viewportWidth, const uint16_t viewportHeight,
+                                      const int orientedMarginLeft, const int orientedMarginTop) {
+  if (!epub) {
+    return;
+  }
+  if (preCacheSpineIndex < 0 || preCacheSpineIndex >= epub->getSpineItemsCount()) {
+    return;
+  }
+
+  Section sec(epub, preCacheSpineIndex, renderer);
+  if (!sec.loadSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                           SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth, viewportHeight,
+                           SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle, SETTINGS.imageRendering,
+                           SETTINGS.focusReadingEnabled)) {
+    LOG_DBG("ERS", "Pre-cache: building section %d", preCacheSpineIndex);
+    if (!sec.createSectionFile(SETTINGS.getReaderFontId(), SETTINGS.getReaderLineCompression(),
+                               SETTINGS.extraParagraphSpacing, SETTINGS.paragraphAlignment, viewportWidth,
+                               viewportHeight, SETTINGS.hyphenationEnabled, SETTINGS.embeddedStyle,
+                               SETTINGS.imageRendering, SETTINGS.focusReadingEnabled)) {
+      LOG_ERR("ERS", "Pre-cache: failed to build section %d", preCacheSpineIndex);
+      return;
+    }
+  }
+
+  if (sec.pageCount == 0) {
+    return;
+  }
+
+  // storeBwBuffer preserves the on-screen progress UI while we silently render
+  // images off-screen to populate the .pxc pixel cache as a side effect.
+  const bool stored = renderer.storeBwBuffer();
+  for (uint16_t p = 0; p < sec.pageCount; ++p) {
+    sec.currentPage = p;
+    auto page = sec.loadPageFromSectionFile();
+    if (!page || !page->hasImages()) {
+      continue;
+    }
+    for (const auto& el : page->elements) {
+      if (el->getTag() == TAG_PageImage) {
+        // PageImage::render forwards to ImageBlock::render which writes the
+        // .pxc cache when missing; fontId is unused for image elements.
+        el->render(renderer, 0, orientedMarginLeft, orientedMarginTop);
+      }
+    }
+  }
+  if (stored) {
+    renderer.restoreBwBuffer();
+  }
+}
+
+void EpubReaderActivity::renderPreCacheProgress() {
+  renderer.clearScreen();
+  const int total = epub ? epub->getSpineItemsCount() : 0;
+  const int current = (total > 0) ? std::min(preCacheSpineIndex, total) : 0;
+  const int pageWidth = renderer.getScreenWidth();
+  const int pageHeight = renderer.getScreenHeight();
+
+  renderer.drawCenteredText(UI_12_FONT_ID, pageHeight / 2 - 30, tr(STR_PRE_CACHING_IMAGES), true, EpdFontFamily::BOLD);
+
+  if (total > 0) {
+    GUI.drawProgressBar(renderer, Rect{50, pageHeight / 2 + 10, pageWidth - 100, 20}, current, total);
+    char pctBuf[32];
+    const int pct = static_cast<int>(100.0f * static_cast<float>(current) / static_cast<float>(total));
+    snprintf(pctBuf, sizeof(pctBuf), "%d / %d (%d%%)", current, total, pct);
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 + 50, pctBuf);
+  }
+
+  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  renderer.displayBuffer();
 }
 
 bool EpubReaderActivity::saveProgress(int spineIndex, int currentPage, int pageCount) {

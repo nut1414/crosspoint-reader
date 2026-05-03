@@ -46,6 +46,12 @@ class EpubReaderActivity final : public Activity {
   // Consumed in onExit() to relocate the finished book into /Read/.
   bool pendingReadFolderMove = false;
 
+  // Pre-cache image state. When active, loop() processes one spine per frame
+  // (loading or building its section file, then silently rendering each image
+  // to populate the .pxc pixel cache) and render() shows a progress screen.
+  bool isPreCaching = false;
+  int preCacheSpineIndex = 0;
+
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
   struct SavedPosition {
@@ -60,6 +66,8 @@ class EpubReaderActivity final : public Activity {
                       int orientedMarginBottom, int orientedMarginLeft);
   void renderStatusBar() const;
   void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
+  void preCacheStep(uint16_t viewportWidth, uint16_t viewportHeight, int orientedMarginLeft, int orientedMarginTop);
+  void renderPreCacheProgress();
   bool saveProgress(int spineIndex, int currentPage, int pageCount);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
