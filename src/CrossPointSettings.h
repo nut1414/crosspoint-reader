@@ -264,6 +264,9 @@ class CrossPointSettings {
   uint8_t moveFinishedToReadFolder = 0;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
+  // Auto pre-cache images when opening an EPUB that has no section cache yet
+  // (1 = enabled, 0 = disabled). Skipped when imageRendering != IMAGES_DISPLAY.
+  uint8_t autoPreCacheImages = 1;
   // Tilt-based page turning (X3 only — requires QMI8658 IMU)
   uint8_t tiltPageTurn = TILT_OFF;
   // Language setting (Language enum index, default 0 = EN)

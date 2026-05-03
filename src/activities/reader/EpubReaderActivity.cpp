@@ -199,6 +199,18 @@ void EpubReaderActivity::onEnter() {
 
   loadCachedBookmarks();
 
+  // Auto pre-cache: if enabled and the book has no section cache yet, kick off
+  // pre-caching before the first page render so images are decoded up-front.
+  // Only meaningful when images will actually be rendered.
+  if (SETTINGS.autoPreCacheImages && SETTINGS.imageRendering == CrossPointSettings::IMAGES_DISPLAY) {
+    const std::string firstSectionPath = epub->getCachePath() + "/sections/0.bin";
+    if (!Storage.exists(firstSectionPath.c_str())) {
+      LOG_DBG("ERS", "Auto pre-cache: no section cache found, starting");
+      isPreCaching = true;
+      preCacheSpineIndex = 0;
+    }
+  }
+
   // Trigger first update
   requestUpdate();
 }
