@@ -176,6 +176,13 @@ class CrossPointSettings {
     QUICK_RESUME_SLEEP_SCREEN_COUNT
   };
 
+  enum HOME_COVER_MODE {
+    GENERATE_AND_DISPLAY = 0,
+    DISPLAY_EXISTING_ONLY = 1,
+    DEFAULT_COVER_ONLY = 2,
+    HOME_COVER_MODE_COUNT
+  };
+
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
   // Sleep screen cover mode settings
@@ -269,6 +276,8 @@ class CrossPointSettings {
   uint8_t autoPreCacheImages = 1;
   // Tilt-based page turning (X3 only — requires QMI8658 IMU)
   uint8_t tiltPageTurn = TILT_OFF;
+  // Home screen cover mode
+  uint8_t homeCoverMode = GENERATE_AND_DISPLAY;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
   // Quick Resume: keep current content visible with moon icon instead of showing a static sleep screen.

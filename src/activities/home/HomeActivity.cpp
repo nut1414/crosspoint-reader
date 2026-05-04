@@ -51,11 +51,23 @@ void HomeActivity::loadRecentBooks(int maxBooks) {
       continue;
     }
 
-    recentBooks.push_back(book);
+    RecentBook copy = book;
+    if (SETTINGS.homeCoverMode == CrossPointSettings::DEFAULT_COVER_ONLY) {
+      copy.coverBmpPath = "";
+    }
+    recentBooks.push_back(copy);
   }
 }
 
 void HomeActivity::loadRecentCovers(int coverHeight) {
+  // Skip cover generation for modes that don't need it
+  if (SETTINGS.homeCoverMode == CrossPointSettings::DEFAULT_COVER_ONLY ||
+      SETTINGS.homeCoverMode == CrossPointSettings::DISPLAY_EXISTING_ONLY) {
+    recentsLoaded = true;
+    recentsLoading = false;
+    return;
+  }
+
   recentsLoading = true;
   bool showingLoading = false;
   Rect popupRect;
