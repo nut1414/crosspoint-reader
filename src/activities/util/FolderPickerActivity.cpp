@@ -108,6 +108,9 @@ void FolderPickerActivity::loop() {
       }
       requestUpdate();
     } else {
+      ActivityResult res;
+      res.isCancelled = true;
+      setResult(std::move(res));
       finish();
     }
     return;

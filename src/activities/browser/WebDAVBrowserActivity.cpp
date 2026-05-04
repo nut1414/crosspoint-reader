@@ -263,7 +263,7 @@ void WebDAVBrowserActivity::startDownload(const WebDAVItem& item) {
 
   auto picker = std::make_unique<FolderPickerActivity>(renderer, mappedInput, "/");
   startActivityForResult(std::move(picker), [this](const ActivityResult& result) {
-    if (!result.isCancelled) {
+    if (!result.isCancelled && std::holds_alternative<KeyboardResult>(result.data)) {
       const auto& kb = std::get<KeyboardResult>(result.data);
       performDownload(kb.text);
     } else {
