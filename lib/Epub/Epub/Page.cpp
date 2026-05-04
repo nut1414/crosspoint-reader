@@ -47,6 +47,10 @@ void PageImage::render(GfxRenderer& renderer, const int fontId, const int xOffse
   imageBlock->render(renderer, xPos + xOffset, yPos + yOffset);
 }
 
+bool PageImage::preCacheImage(GfxRenderer& renderer, const int xOffset, const int yOffset) {
+  return imageBlock->preCacheImage(renderer, xPos + xOffset, yPos + yOffset);
+}
+
 bool PageImage::serialize(HalFile& file) {
   serialization::writePod(file, xPos);
   serialization::writePod(file, yPos);

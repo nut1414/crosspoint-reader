@@ -183,7 +183,7 @@ int pngDrawCallback(PNGDRAW* pDraw) {
   if (dstY >= ctx->dstHeight) return 1;
 
   int outY = ctx->config->y + dstY;
-  if (outY >= ctx->screenHeight) return 1;
+  if (!ctx->config->cacheOnly && outY >= ctx->screenHeight) return 1;
 
   // Convert entire source line to grayscale (improves cache locality)
   convertLineToGray(pDraw->pPixels, ctx->grayLineBuffer, srcWidth, pDraw->iPixelType, pDraw->pPalette,
@@ -195,11 +195,14 @@ int pngDrawCallback(PNGDRAW* pDraw) {
   int screenWidth = ctx->screenWidth;
   bool useDithering = ctx->config->useDithering;
   bool caching = ctx->caching;
+  bool cacheOnly = ctx->config->cacheOnly;
 
   // Pre-compute orientation and render-mode state once per row
   DirectPixelWriter pw;
-  pw.init(*ctx->renderer);
-  pw.beginRow(outY);
+  if (!cacheOnly) {
+    pw.init(*ctx->renderer);
+    pw.beginRow(outY);
+  }
 
   // The cache streams to disk one row at a time. Flushing rows below this one
   // (PNGdec delivers scanlines top to bottom) repositions the single-row band.
@@ -221,7 +224,7 @@ int pngDrawCallback(PNGDRAW* pDraw) {
 
   for (int dstX = 0; dstX < dstWidth; dstX++) {
     int outX = outXBase + dstX;
-    if (outX < screenWidth) {
+    if (cacheOnly || outX < screenWidth) {
       uint8_t gray = ctx->grayLineBuffer[srcX];
 
       uint8_t ditheredGray;
@@ -231,7 +234,7 @@ int pngDrawCallback(PNGDRAW* pDraw) {
         ditheredGray = gray / 85;
         if (ditheredGray > 3) ditheredGray = 3;
       }
-      pw.writePixel(outX, ditheredGray);
+      if (!cacheOnly) pw.writePixel(outX, ditheredGray);
       if (caching) cw.writePixel(outX, ditheredGray);
     }
 

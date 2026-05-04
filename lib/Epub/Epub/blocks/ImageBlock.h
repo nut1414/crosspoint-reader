@@ -21,10 +21,14 @@ class ImageBlock final : public Block {
   bool isEmpty() override { return false; }
 
   void render(GfxRenderer& renderer, const int x, const int y);
+  bool preCacheImage(GfxRenderer& renderer, const int x, const int y);
+  bool hasCachedVersion() const;
   bool serialize(HalFile& file);
   static std::unique_ptr<ImageBlock> deserialize(HalFile& file);
 
  private:
+  static std::string getCachePath(const std::string& imagePath);
+
   std::string imagePath;
   int16_t width;
   int16_t height;

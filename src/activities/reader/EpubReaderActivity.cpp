@@ -1120,9 +1120,6 @@ void EpubReaderActivity::preCacheStep(const uint16_t viewportWidth, const uint16
     return;
   }
 
-  // storeBwBuffer preserves the on-screen progress UI while we silently render
-  // images off-screen to populate the .pxc pixel cache as a side effect.
-  const bool stored = renderer.storeBwBuffer();
   for (uint16_t p = 0; p < sec.pageCount; ++p) {
     sec.currentPage = p;
     auto page = sec.loadPageFromSectionFile();
@@ -1131,14 +1128,9 @@ void EpubReaderActivity::preCacheStep(const uint16_t viewportWidth, const uint16
     }
     for (const auto& el : page->elements) {
       if (el->getTag() == TAG_PageImage) {
-        // PageImage::render forwards to ImageBlock::render which writes the
-        // .pxc cache when missing; fontId is unused for image elements.
-        el->render(renderer, 0, orientedMarginLeft, orientedMarginTop);
+        static_cast<PageImage&>(*el).preCacheImage(renderer, orientedMarginLeft, orientedMarginTop);
       }
     }
-  }
-  if (stored) {
-    renderer.restoreBwBuffer();
   }
 }
 

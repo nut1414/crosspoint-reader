@@ -18,16 +18,58 @@ ImageBlock::ImageBlock(const std::string& imagePath, int16_t width, int16_t heig
 
 bool ImageBlock::imageExists() const { return Storage.exists(imagePath.c_str()); }
 
-namespace {
-
-std::string getCachePath(const std::string& imagePath) {
-  // Replace extension with .pxc (pixel cache)
-  size_t dotPos = imagePath.rfind('.');
+std::string ImageBlock::getCachePath(const std::string& path) {
+  size_t dotPos = path.rfind('.');
   if (dotPos != std::string::npos) {
-    return imagePath.substr(0, dotPos) + ".pxc";
+    return path.substr(0, dotPos) + ".pxc";
   }
-  return imagePath + ".pxc";
+  return path + ".pxc";
 }
+
+bool ImageBlock::hasCachedVersion() const {
+  return Storage.exists(getCachePath(imagePath).c_str());
+}
+
+bool ImageBlock::preCacheImage(GfxRenderer& renderer, const int x, const int y) {
+  if (hasCachedVersion()) return true;
+
+  HalFile file;
+  if (!Storage.openFileForRead("IMG", imagePath, file)) {
+    LOG_ERR("IMG", "Image file not found: %s", imagePath.c_str());
+    return false;
+  }
+  size_t fileSize = file.size();
+  file.close();
+
+  if (fileSize == 0) {
+    LOG_ERR("IMG", "Image file is empty: %s", imagePath.c_str());
+    return false;
+  }
+
+  std::string cachePath = getCachePath(imagePath);
+
+  RenderConfig config;
+  config.x = x;
+  config.y = y;
+  config.maxWidth = width;
+  config.maxHeight = height;
+  config.useGrayscale = true;
+  config.useDithering = true;
+  config.performanceMode = false;
+  config.useExactDimensions = true;
+  config.cacheOnly = true;
+  config.cachePath = cachePath;
+
+  ImageToFramebufferDecoder* decoder = ImageDecoderFactory::getDecoder(imagePath);
+  if (!decoder) {
+    LOG_ERR("IMG", "No decoder found for image: %s", imagePath.c_str());
+    return false;
+  }
+
+  return decoder->decodeToFramebuffer(imagePath, renderer, config);
+}
+
+namespace {
 
 bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x, int y, int expectedWidth,
                      int expectedHeight) {
