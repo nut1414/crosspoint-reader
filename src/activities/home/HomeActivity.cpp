@@ -32,6 +32,9 @@ int HomeActivity::getMenuItemCount() const {
   if (hasWebDAVServers) {
     count++;
   }
+  if (SETTINGS.bluetoothPageTurnerOnHome) {
+    count++;
+  }
   return count;
 }
 
@@ -136,7 +139,8 @@ void HomeActivity::onEnter() {
   const auto base = static_cast<int>(recentBooks.size());
   selectorIndex = initialMenuItem == HomeMenuItem::NONE
                       ? 0
-                      : base + menuItemToIndex(initialMenuItem, hasOpdsServers, hasWebDAVServers);
+                      : base + menuItemToIndex(initialMenuItem, hasOpdsServers, hasWebDAVServers,
+                                               SETTINGS.bluetoothPageTurnerOnHome);
 
   // Trigger first update
   requestUpdate();
@@ -203,7 +207,7 @@ void HomeActivity::loop() {
       onSelectBook(recentBooks[selectorIndex].path);
     } else {
       const int menuIndex = selectorIndex - static_cast<int>(recentBooks.size());
-      switch (indexToMenuItem(menuIndex, hasOpdsServers, hasWebDAVServers)) {
+      switch (indexToMenuItem(menuIndex, hasOpdsServers, hasWebDAVServers, SETTINGS.bluetoothPageTurnerOnHome)) {
         case HomeMenuItem::FILE_BROWSER:
           onFileBrowserOpen();
           break;
@@ -215,6 +219,9 @@ void HomeActivity::loop() {
           break;
         case HomeMenuItem::WEBDAV_BROWSER:
           onWebDAVBrowserOpen();
+          break;
+        case HomeMenuItem::BLUETOOTH_PAGE_TURNER:
+          onBluetoothPageTurnerOpen();
           break;
         case HomeMenuItem::FILE_TRANSFER:
           onFileTransferOpen();
@@ -253,20 +260,25 @@ void HomeActivity::render(RenderLock&&) {
                           std::bind(&HomeActivity::storeCoverBuffer, this));
 
   // Build menu items dynamically
-  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS), tr(STR_FILE_TRANSFER),
-                                        tr(STR_SETTINGS_TITLE)};
-  std::vector<UIIcon> menuIcons = {Folder, Recent, Transfer, Settings};
+  std::vector<const char*> menuItems = {tr(STR_BROWSE_FILES), tr(STR_MENU_RECENT_BOOKS)};
+  std::vector<UIIcon> menuIcons = {Folder, Recent};
 
   if (hasOpdsServers) {
-    menuItems.insert(menuItems.begin() + 2, tr(STR_OPDS_BROWSER));
-    menuIcons.insert(menuIcons.begin() + 2, Library);
+    menuItems.push_back(tr(STR_OPDS_BROWSER));
+    menuIcons.push_back(Library);
   }
   if (hasWebDAVServers) {
-    int insertPos = 2;
-    if (hasOpdsServers) insertPos++;
-    menuItems.insert(menuItems.begin() + insertPos, tr(STR_WEBDAV_BROWSER));
-    menuIcons.insert(menuIcons.begin() + insertPos, Library);
+    menuItems.push_back(tr(STR_WEBDAV_BROWSER));
+    menuIcons.push_back(Library);
   }
+  if (SETTINGS.bluetoothPageTurnerOnHome) {
+    menuItems.push_back(tr(STR_BLUETOOTH_PAGE_TURNER));
+    menuIcons.push_back(Wifi);
+  }
+  menuItems.push_back(tr(STR_FILE_TRANSFER));
+  menuIcons.push_back(Transfer);
+  menuItems.push_back(tr(STR_SETTINGS_TITLE));
+  menuIcons.push_back(Settings);
 
   if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
     // Insert Continue Reading at the top if enabled in theme
@@ -307,6 +319,8 @@ void HomeActivity::onRecentsOpen() { activityManager.goToRecentBooks(); }
 void HomeActivity::onSettingsOpen() { activityManager.goToSettings(); }
 
 void HomeActivity::onFileTransferOpen() { activityManager.goToFileTransfer(); }
+
+void HomeActivity::onBluetoothPageTurnerOpen() { activityManager.goToBluetoothPageTurner(true); }
 
 void HomeActivity::onOpdsBrowserOpen() { activityManager.goToBrowser(); }
 

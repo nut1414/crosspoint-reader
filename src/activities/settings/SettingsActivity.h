@@ -25,6 +25,7 @@ enum class SettingAction {
   Language,
   FilesManagement,
   DownloadFonts,
+  BluetoothPageTurner,
 };
 
 struct SettingInfo {

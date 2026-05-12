@@ -99,6 +99,14 @@ class CrossPointSettings {
   // Default: Up = Previous, Down = Next
   enum SIDE_BUTTON_LAYOUT { PREV_NEXT = 0, NEXT_PREV = 1, SIDE_BUTTONS_DISABLED = 2, SIDE_BUTTON_LAYOUT_COUNT };
 
+  // Bluetooth page turner HID key profiles
+  enum BLUETOOTH_PAGE_TURNER_KEYS {
+    BT_KEYS_PAGE_UP_DOWN = 0,
+    BT_KEYS_LEFT_RIGHT = 1,
+    BT_KEYS_UP_DOWN = 2,
+    BLUETOOTH_PAGE_TURNER_KEYS_COUNT
+  };
+
   // Font family options (built-in fonts only; SD card fonts use sdFontFamilyName)
   enum FONT_FAMILY { BOOKERLY = 0, NOTOSANS = 1, NOTOSERIF = 3, FONT_FAMILY_COUNT };
   static constexpr uint8_t LEGACY_OPENDYSLEXIC = 2;
@@ -221,6 +229,8 @@ class CrossPointSettings {
   uint8_t frontButtonLayout = BACK_CONFIRM_LEFT_RIGHT;
   uint8_t sideButtonLayout = PREV_NEXT;
   uint8_t frontButtonFollowOrientation = 0;
+  uint8_t bluetoothPageTurnerKeys = BT_KEYS_PAGE_UP_DOWN;
+  uint8_t bluetoothPageTurnerOnHome = 0;
   // Front button remap (logical -> hardware)
   // Used by MappedInputManager to translate logical buttons into physical front buttons.
   uint8_t frontButtonBack = FRONT_HW_BACK;

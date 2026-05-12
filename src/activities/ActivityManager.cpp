@@ -19,6 +19,7 @@
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/WebDAVServerListActivity.h"
+#include "settings/BluetoothPageTurnerActivity.h"
 #include "settings/SettingsActivity.h"
 #include "util/FullScreenMessageActivity.h"
 
@@ -205,6 +206,15 @@ void ActivityManager::goToWebDAVBrowser() {
   }
 }
 
+void ActivityManager::goToBluetoothPageTurner(bool replaceCurrent) {
+  auto activity = std::make_unique<BluetoothPageTurnerActivity>(renderer, mappedInput);
+  if (replaceCurrent) {
+    replaceActivity(std::move(activity));
+  } else {
+    pushActivity(std::move(activity));
+  }
+}
+
 void ActivityManager::goToReader(std::string path) {
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path)));
 }
@@ -231,6 +241,8 @@ void ActivityManager::goHome(HomeMenuItem initialMenuItem) {
       initialMenuItem = HomeMenuItem::OPDS_BROWSER;
     } else if (activityName == "WebDAVBrowser") {
       initialMenuItem = HomeMenuItem::WEBDAV_BROWSER;
+    } else if (activityName == "BluetoothPageTurner") {
+      initialMenuItem = HomeMenuItem::BLUETOOTH_PAGE_TURNER;
     } else if (activityName == "CrossPointWebServer") {
       initialMenuItem = HomeMenuItem::FILE_TRANSFER;
     } else if (activityName == "Settings") {

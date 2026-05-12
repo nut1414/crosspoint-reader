@@ -32,7 +32,8 @@ class HomeActivity final : public Activity {
   const HomeMenuItem initialMenuItem;
 
   // Convert HomeMenuItem to menu index (used in onEnter)
-  static int menuItemToIndex(HomeMenuItem item, bool hasOpdsUrl, bool hasWebDAVServers) {
+  static int menuItemToIndex(HomeMenuItem item, bool hasOpdsUrl, bool hasWebDAVServers,
+                             bool hasBluetoothPageTurner) {
     int i = 0;
     if (item == HomeMenuItem::FILE_BROWSER) return i;
     ++i;
@@ -42,6 +43,8 @@ class HomeActivity final : public Activity {
     if (hasOpdsUrl) ++i;
     if (item == HomeMenuItem::WEBDAV_BROWSER) return hasWebDAVServers ? i : 0;
     if (hasWebDAVServers) ++i;
+    if (item == HomeMenuItem::BLUETOOTH_PAGE_TURNER) return hasBluetoothPageTurner ? i : 0;
+    if (hasBluetoothPageTurner) ++i;
     if (item == HomeMenuItem::FILE_TRANSFER) return i;
     ++i;
     if (item == HomeMenuItem::SETTINGS_MENU) return i;
@@ -49,12 +52,13 @@ class HomeActivity final : public Activity {
   }
 
   // Convert menu index to HomeMenuItem (used in loop)
-  static HomeMenuItem indexToMenuItem(int idx, bool hasOpdsUrl, bool hasWebDAVServers) {
+  static HomeMenuItem indexToMenuItem(int idx, bool hasOpdsUrl, bool hasWebDAVServers, bool hasBluetoothPageTurner) {
     int i = 0;
     if (idx == i++) return HomeMenuItem::FILE_BROWSER;
     if (idx == i++) return HomeMenuItem::RECENTS;
     if (hasOpdsUrl && idx == i++) return HomeMenuItem::OPDS_BROWSER;
     if (hasWebDAVServers && idx == i++) return HomeMenuItem::WEBDAV_BROWSER;
+    if (hasBluetoothPageTurner && idx == i++) return HomeMenuItem::BLUETOOTH_PAGE_TURNER;
     if (idx == i++) return HomeMenuItem::FILE_TRANSFER;
     if (idx == i) return HomeMenuItem::SETTINGS_MENU;
     return HomeMenuItem::NONE;
@@ -64,6 +68,7 @@ class HomeActivity final : public Activity {
   void onRecentsOpen();
   void onSettingsOpen();
   void onFileTransferOpen();
+  void onBluetoothPageTurnerOpen();
   void onOpdsBrowserOpen();
   void onWebDAVBrowserOpen();
 

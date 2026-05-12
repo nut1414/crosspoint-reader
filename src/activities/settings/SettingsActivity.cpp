@@ -61,6 +61,9 @@ void SettingsActivity::rebuildSettingsLists() {
   // Append device-only ACTION items
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
+  controlsSettings.insert(controlsSettings.begin() + 1,
+                          SettingInfo::Action(StrId::STR_BLUETOOTH_PAGE_TURNER,
+                                              SettingAction::BluetoothPageTurner));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_FILES_MANAGEMENT, SettingAction::FilesManagement));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
@@ -273,6 +276,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::Language:
         startActivityForResult(std::make_unique<LanguageSelectActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::BluetoothPageTurner:
+        activityManager.goToBluetoothPageTurner();
         break;
       case SettingAction::None:
         // Do nothing
