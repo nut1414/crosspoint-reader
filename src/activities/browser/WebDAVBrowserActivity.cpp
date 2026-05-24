@@ -14,7 +14,6 @@
 #include "fontIds.h"
 #include "network/HttpDownloader.h"
 #include "util/StringUtils.h"
-#include "util/UrlUtils.h"
 
 void WebDAVBrowserActivity::onEnter() {
   Activity::onEnter();
@@ -150,7 +149,7 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
   }
 
   const char* confirmLabel =
-      (!items.empty() && items[selectorIndex].isDirectory) ? tr(STR_OPEN) : tr(STR_DOWNLOAD);
+      items.empty() ? "" : (items[selectorIndex].isDirectory ? tr(STR_OPEN) : tr(STR_DOWNLOAD));
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
 
   if (truncated) {
@@ -196,7 +195,7 @@ void WebDAVBrowserActivity::fetchDirectory(const std::string& url) {
   }
 
   LOG_DBG("WEBDAV", "Fetching directory: %s", url.c_str());
-  auto error = WebDAVClient::propfind(url, items, server.username, server.password, &truncated);
+  auto error = WebDAVClient::propfind(url, items, server.username, server.password, &truncated, server.url);
 
   if (error != WebDAVError::OK) {
     state = BrowserState::ERROR;
@@ -216,14 +215,13 @@ void WebDAVBrowserActivity::fetchDirectory(const std::string& url) {
   }
 
   selectorIndex = 0;
-  state = items.empty() ? BrowserState::ERROR : BrowserState::BROWSING;
-  if (items.empty()) errorMessage = tr(STR_NO_ENTRIES);
+  state = BrowserState::BROWSING;
   requestUpdate();
 }
 
 void WebDAVBrowserActivity::navigateToItem(const WebDAVItem& item) {
   navigationHistory.push_back(currentUrl);
-  currentUrl = UrlUtils::buildUrl(currentUrl, item.href);
+  currentUrl = item.href;
   // Ensure directory URLs end with / for consistent PROPFIND behavior
   if (!currentUrl.empty() && currentUrl.back() != '/') {
     currentUrl += '/';
@@ -255,7 +253,7 @@ void WebDAVBrowserActivity::navigateBack() {
 }
 
 void WebDAVBrowserActivity::startDownload(const WebDAVItem& item) {
-  pendingDownloadUrl = UrlUtils::buildUrl(currentUrl, item.href);
+  pendingDownloadUrl = item.href;
   pendingDownloadName = item.name;
 
   state = BrowserState::PICKING_DEST;
