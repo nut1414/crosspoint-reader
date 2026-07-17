@@ -43,6 +43,9 @@ class Activity {
 
   virtual bool skipLoopDelay() { return false; }
   virtual bool preventAutoSleep() { return false; }
+  // Background work historically used preventAutoSleep() for both policies. Keep that
+  // behavior by default, while allowing idle activities to stay awake at low CPU speed.
+  virtual bool preventPowerSaving() { return preventAutoSleep(); }
   virtual bool isReaderActivity() const { return false; }
   virtual ScreenshotInfo getScreenshotInfo() const { return {}; }
 

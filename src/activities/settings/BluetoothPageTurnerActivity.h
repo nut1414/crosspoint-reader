@@ -1,5 +1,8 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
+
 #include "activities/Activity.h"
 
 class BLECharacteristic;
@@ -8,15 +11,18 @@ class BLEServer;
 
 class BluetoothPageTurnerActivity final : public Activity {
   class ServerCallbacks;
+  static constexpr uint32_t NO_PENDING_CONNECTION = UINT32_MAX;
 
   BLEHIDDevice* hidDevice = nullptr;
   BLECharacteristic* keyboardInput = nullptr;
+  BLECharacteristic* consumerInput = nullptr;
   BLEServer* server = nullptr;
   ServerCallbacks* serverCallbacks = nullptr;
 
   volatile bool deviceConnected = false;
   volatile bool stoppingBle = false;
   volatile bool restartAdvertisingRequested = false;
+  std::atomic<uint32_t> pendingConnectionHandle{NO_PENDING_CONNECTION};
   bool renderedConnected = false;
   bool bleStarted = false;
   bool bleAvailable = true;
@@ -31,6 +37,7 @@ class BluetoothPageTurnerActivity final : public Activity {
   void updateBatteryLevel(bool force);
   void sendPageTurn(bool next);
   void sendKeyboardKey(uint8_t usage);
+  void sendConsumerKey(uint16_t usage);
   const char* getProfileLabel() const;
   const char* getStatusLabel() const;
 
@@ -42,5 +49,6 @@ class BluetoothPageTurnerActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
-  bool preventAutoSleep() override { return true; }
+  bool preventAutoSleep() override { return bleStarted; }
+  bool preventPowerSaving() override { return false; }
 };
