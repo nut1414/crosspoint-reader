@@ -8,6 +8,7 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include "BookOptionsMenuActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
@@ -60,6 +61,20 @@ void TxtReaderActivity::onExit() {
 }
 
 void TxtReaderActivity::loop() {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && txt) {
+    startActivityForResult(
+        std::make_unique<BookOptionsMenuActivity>(renderer, mappedInput, txt->getTitle(), false),
+        [this](const ActivityResult& result) {
+          if (result.isCancelled) return;
+
+          const auto action = static_cast<BookOptionsMenuActivity::Action>(std::get<MenuResult>(result.data).action);
+          if (action == BookOptionsMenuActivity::Action::BROWSE_BOOK_FOLDER) {
+            activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+          }
+        });
+    return;
+  }
+
   // Long press BACK (1s+) goes to file selection
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     activityManager.goToFileBrowser(txt ? txt->getPath() : "");

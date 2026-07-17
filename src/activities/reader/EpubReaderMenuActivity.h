@@ -21,6 +21,7 @@ class EpubReaderMenuActivity final : public Activity {
     TOGGLE_BOOKMARK,
     SCREENSHOT,
     DISPLAY_QR,
+    BROWSE_BOOK_FOLDER,
     GO_HOME,
     SYNC,
     DELETE_CACHE,

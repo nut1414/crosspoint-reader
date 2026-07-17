@@ -14,6 +14,7 @@
 
 #include <algorithm>
 
+#include "BookOptionsMenuActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
@@ -54,17 +55,30 @@ void XtcReaderActivity::onExit() {
 }
 
 void XtcReaderActivity::loop() {
-  // Enter chapter selection activity
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (xtc && xtc->hasChapters() && !xtc->getChapters().empty()) {
-      startActivityForResult(
-          std::make_unique<XtcReaderChapterSelectionActivity>(renderer, mappedInput, xtc, currentPage),
-          [this](const ActivityResult& result) {
-            if (!result.isCancelled) {
-              currentPage = std::get<PageResult>(result.data).page;
-            }
-          });
-    }
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && xtc) {
+    const bool hasChapters = xtc->hasChapters() && !xtc->getChapters().empty();
+    startActivityForResult(
+        std::make_unique<BookOptionsMenuActivity>(renderer, mappedInput, xtc->getTitle(), hasChapters),
+        [this](const ActivityResult& result) {
+          if (result.isCancelled) return;
+
+          const auto action = static_cast<BookOptionsMenuActivity::Action>(std::get<MenuResult>(result.data).action);
+          switch (action) {
+            case BookOptionsMenuActivity::Action::SELECT_CHAPTER:
+              startActivityForResult(
+                  std::make_unique<XtcReaderChapterSelectionActivity>(renderer, mappedInput, xtc, currentPage),
+                  [this](const ActivityResult& chapterResult) {
+                    if (!chapterResult.isCancelled) {
+                      currentPage = std::get<PageResult>(chapterResult.data).page;
+                    }
+                  });
+              break;
+            case BookOptionsMenuActivity::Action::BROWSE_BOOK_FOLDER:
+              activityManager.goToFileBrowser(xtc ? xtc->getPath() : "");
+              break;
+          }
+        });
+    return;
   }
 
   // Long press BACK (1s+) goes to file selection

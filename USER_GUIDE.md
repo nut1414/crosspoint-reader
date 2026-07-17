@@ -574,12 +574,13 @@ What is not supported with built-in reader fonts: Chinese, Japanese, Korean, Ara
 
 ## 5. Reader Menu
 
-Press **Confirm** while reading to open the Reader Menu. From here you can access reading utilities and navigation options without leaving the book.
+Press **Confirm** while reading an EPUB, XTC, TXT, or Markdown book to open the Reader Menu. From here you can access the options supported by the current book format. XTC chapter selection is available from this menu when the book contains chapter information.
 
 Available options include:
 
 - **Select Chapter** – Open the table of contents to jump to a specific chapter (see [Chapter Selection](#51-chapter-selection) below).
 - **Footnotes** – Navigate to the footnotes for the current section *(only shown in books that contain footnotes)*.
+- **Browse Book Folder** – Close the current book and open its containing folder with the current book highlighted, ready to move to and open an adjacent book.
 - **Reading Orientation** – Cycle through screen orientations without leaving the reader.
 - **Auto Turn (Pages Per Minute)** – Cycle through automatic page turn speed options for hands-free reading.
 - **Go to %** – Jump to a specific position in the book by percentage.
@@ -588,6 +589,8 @@ Available options include:
 - **Go Home** – Close the book and return to the Home screen.
 - **Sync Progress** – Push or pull reading progress with a KOReader sync server (see [KOReader Sync Quick Setup](#367-koreader-sync-quick-setup)).
 - **Delete Book Cache** – Clear the cached layout data for the current book, forcing a re-index on next open.
+
+Except for **Browse Book Folder** and XTC chapter selection, the options above are currently available in the EPUB reader.
 
 Press **Back** at any time to close the menu and return to your current page.
 

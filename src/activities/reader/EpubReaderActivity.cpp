@@ -656,6 +656,10 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
       requestUpdate();
       break;
     }
+    case EpubReaderMenuActivity::MenuAction::BROWSE_BOOK_FOLDER: {
+      activityManager.goToFileBrowser(epub ? epub->getPath() : "");
+      return;
+    }
     case EpubReaderMenuActivity::MenuAction::GO_HOME: {
       onGoHome();
       return;
