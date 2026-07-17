@@ -28,6 +28,7 @@
 #include "WebDAVServerStore.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
+#include "activities/ActivityPowerPolicy.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -545,12 +546,20 @@ void loop() {
     }
   }
 
-  // Check for any user activity (button press or release) or active background work
+  // Check for any user activity (button press or release) or active background work.
   static unsigned long lastActivityTime = millis();
-  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || halTiltSensor.hadActivity() ||
-      activityManager.preventAutoSleep()) {
-    lastActivityTime = millis();         // Reset inactivity timer
-    powerManager.setPowerSaving(false);  // Restore normal CPU frequency on user activity
+  static unsigned long lastFullSpeedTime = lastActivityTime;
+  const unsigned long activityNow = millis();
+  const bool userActivity = gpio.wasAnyPressed() || gpio.wasAnyReleased() || halTiltSensor.hadActivity();
+  const bool preventAutoSleep = activityManager.preventAutoSleep();
+  const bool preventPowerSaving = activityManager.preventPowerSaving() || activityManager.skipLoopDelay();
+  const auto powerDecision = ActivityPowerPolicy::decide(userActivity, preventAutoSleep, preventPowerSaving);
+  if (powerDecision.resetAutoSleepTimer) {
+    lastActivityTime = activityNow;
+  }
+  if (powerDecision.resetFullSpeedTimer) {
+    lastFullSpeedTime = activityNow;
+    powerManager.setPowerSaving(false);
   }
 
   static bool screenshotButtonsReleased = true;
@@ -629,7 +638,7 @@ void loop() {
     powerManager.setPowerSaving(false);  // Make sure we're at full performance when skipLoopDelay is requested
     yield();                             // Give FreeRTOS a chance to run tasks, but return immediately
   } else {
-    if (millis() - lastActivityTime >= HalPowerManager::IDLE_POWER_SAVING_MS) {
+    if (millis() - lastFullSpeedTime >= HalPowerManager::IDLE_POWER_SAVING_MS) {
       // If we've been inactive for a while, increase the delay to save power
       powerManager.setPowerSaving(true);  // Lower CPU frequency after extended inactivity
       delay(50);

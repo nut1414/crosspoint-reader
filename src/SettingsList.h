@@ -200,7 +200,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                             "frontButtonFollowOrientation", StrId::STR_CAT_CONTROLS),
         SettingInfo::Enum(StrId::STR_BLUETOOTH_PAGE_KEYS, &CrossPointSettings::bluetoothPageTurnerKeys,
                           {StrId::STR_BT_KEYS_PAGE_UP_DOWN, StrId::STR_BT_KEYS_LEFT_RIGHT,
-                           StrId::STR_BT_KEYS_UP_DOWN},
+                           StrId::STR_BT_KEYS_UP_DOWN, StrId::STR_BT_KEYS_VOLUME_UP_DOWN},
                           "bluetoothPageTurnerKeys", StrId::STR_CAT_CONTROLS),
         SettingInfo::Toggle(StrId::STR_BT_SHOW_ON_HOME, &CrossPointSettings::bluetoothPageTurnerOnHome,
                             "bluetoothPageTurnerOnHome", StrId::STR_CAT_CONTROLS),
