@@ -10,7 +10,7 @@
 
 class WebDAVPropfindParser {
  public:
-  WebDAVPropfindParser();
+  explicit WebDAVPropfindParser(std::vector<WebDAVItem>&& reusableItems = {});
   ~WebDAVPropfindParser();
 
   bool feed(const char* xmlData, size_t length);

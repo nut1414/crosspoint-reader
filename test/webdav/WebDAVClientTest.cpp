@@ -138,12 +138,59 @@ void testResolveItemsSkipsCurrentCollectionByUrl() {
   PASS();
 }
 
+void testResolveItemsReusesIncomingStorageWhileFilteringInOrder() {
+  printf("testResolveItemsReusesIncomingStorageWhileFilteringInOrder...\n");
+
+  std::vector<WebDAVItem> rawItems{
+      {"/webdav/First.epub", "First.epub", false, 11},
+      {"/webdav/", "webdav", true, 0},
+      {"/webdav/Second.epub", "Second.epub", false, 22},
+  };
+  rawItems.reserve(200);
+  const WebDAVItem* const incomingStorage = rawItems.data();
+  const size_t incomingCapacity = rawItems.capacity();
+
+  auto items = WebDAVUrl::resolveItems("https://host/webdav/", "https://host/webdav/", std::move(rawItems));
+
+  ASSERT_TRUE(items.data() == incomingStorage);
+  ASSERT_SIZE(items.capacity(), incomingCapacity);
+  ASSERT_SIZE(items.size(), 2u);
+  ASSERT_EQ(items[0].href, "https://host/webdav/First.epub");
+  ASSERT_EQ(items[0].name, "First.epub");
+  ASSERT_SIZE(items[0].size, 11u);
+  ASSERT_EQ(items[1].href, "https://host/webdav/Second.epub");
+  ASSERT_EQ(items[1].name, "Second.epub");
+  ASSERT_SIZE(items[1].size, 22u);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testParserReusesPreviousListingStorage() {
+  printf("testParserReusesPreviousListingStorage...\n");
+
+  std::vector<WebDAVItem> previousItems;
+  previousItems.reserve(200);
+  previousItems.push_back({"stale", "stale", false, 0});
+  const WebDAVItem* const incomingStorage = previousItems.data();
+
+  WebDAVPropfindParser parser{std::move(previousItems)};
+  ASSERT_TRUE(parser.items.empty());
+  parser.items.push_back({"fresh", "fresh", false, 0});
+  ASSERT_TRUE(parser.items.data() == incomingStorage);
+
+  printf("  passed\n");
+  PASS();
+}
+
 int main() {
   testResolveRootRelativeHrefUnderConfiguredBase();
   testResolveAbsolutePathHrefThatAlreadyIncludesBasePath();
   testResolveRelativeHrefAgainstCurrentCollection();
   testResolveAbsoluteUrlAsIs();
   testResolveItemsSkipsCurrentCollectionByUrl();
+  testResolveItemsReusesIncomingStorageWhileFilteringInOrder();
+  testParserReusesPreviousListingStorage();
 
   printf("\nTests passed: %d\n", testsPassed);
   if (testsFailed > 0) {

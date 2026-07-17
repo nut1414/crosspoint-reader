@@ -56,7 +56,9 @@ std::string hrefToName(const std::string& href) {
 
 }  // namespace
 
-WebDAVPropfindParser::WebDAVPropfindParser() {
+WebDAVPropfindParser::WebDAVPropfindParser(std::vector<WebDAVItem>&& reusableItems)
+    : items(std::move(reusableItems)) {
+  items.clear();
   parser = XML_ParserCreate(nullptr);
   if (!parser) {
     errorOccurred = true;

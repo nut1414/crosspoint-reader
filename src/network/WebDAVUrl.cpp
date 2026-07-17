@@ -113,18 +113,21 @@ bool sameResource(const std::string& lhs, const std::string& rhs) {
 
 std::vector<WebDAVItem> resolveItems(const std::string& baseUrl, const std::string& currentCollectionUrl,
                                      std::vector<WebDAVItem>&& items) {
-  std::vector<WebDAVItem> resolved;
-  resolved.reserve(items.size());
-
-  for (auto& item : items) {
+  size_t writeIndex = 0;
+  for (size_t readIndex = 0; readIndex < items.size(); ++readIndex) {
+    auto& item = items[readIndex];
     item.href = resolveHref(baseUrl, currentCollectionUrl, item.href);
     if (sameResource(item.href, currentCollectionUrl)) {
       continue;
     }
-    resolved.push_back(std::move(item));
+    if (writeIndex != readIndex) {
+      items[writeIndex] = std::move(item);
+    }
+    ++writeIndex;
   }
+  items.resize(writeIndex);
 
-  return resolved;
+  return std::move(items);
 }
 
 }  // namespace WebDAVUrl

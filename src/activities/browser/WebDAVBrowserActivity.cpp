@@ -178,8 +178,8 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
         }
         displayText += ")";
       }
-      auto truncated = renderer.truncatedText(UI_10_FONT_ID, displayText.c_str(), pageWidth - 40);
-      renderer.drawText(UI_10_FONT_ID, 20, 60 + (i % PAGE_ITEMS) * 30, truncated.c_str(),
+      auto displayLine = renderer.truncatedText(UI_10_FONT_ID, displayText.c_str(), pageWidth - 40);
+      renderer.drawText(UI_10_FONT_ID, 20, 60 + (i % PAGE_ITEMS) * 30, displayLine.c_str(),
                         i != static_cast<size_t>(selectorIndex));
     }
   }

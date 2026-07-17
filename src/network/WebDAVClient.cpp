@@ -39,7 +39,11 @@ class PropfindStream final : public Stream {
 WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVItem>& out,
                                    const std::string& username, const std::string& password,
                                    bool* truncated, const std::string& baseUrl) {
-  out.clear();
+  // Recycle the previous directory listing. Keeping its capacity outside `out`
+  // lets the parser reuse the same item array while `out` remains empty on errors.
+  std::vector<WebDAVItem> reusableItems;
+  reusableItems.swap(out);
+  reusableItems.clear();
   if (truncated) *truncated = false;
 
   const std::string requestUrl = UrlUtils::ensureProtocol(url);
@@ -101,7 +105,7 @@ WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVIte
     return WebDAVError::HTTP_ERROR;
   }
 
-  WebDAVPropfindParser parser;
+  WebDAVPropfindParser parser{std::move(reusableItems)};
   int writeResult = 0;
   {
     PropfindStream stream{parser};
