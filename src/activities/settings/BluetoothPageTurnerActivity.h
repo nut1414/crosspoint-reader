@@ -15,7 +15,6 @@ class BluetoothPageTurnerActivity final : public Activity {
 
   BLEHIDDevice* hidDevice = nullptr;
   BLECharacteristic* keyboardInput = nullptr;
-  BLECharacteristic* consumerInput = nullptr;
   BLEServer* server = nullptr;
   ServerCallbacks* serverCallbacks = nullptr;
 
@@ -37,7 +36,6 @@ class BluetoothPageTurnerActivity final : public Activity {
   void updateBatteryLevel(bool force);
   void sendPageTurn(bool next);
   void sendKeyboardKey(uint8_t usage);
-  void sendConsumerKey(uint16_t usage);
   const char* getProfileLabel() const;
   const char* getStatusLabel() const;
 

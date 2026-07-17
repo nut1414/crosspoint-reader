@@ -53,20 +53,6 @@ const uint8_t HID_REPORT_MAP[] = {
     0x29, 0x65,                    //   Usage Maximum (Keyboard Application)
     0x81, 0x00,                    //   Input (Data, Array)
     0xC0,                          // End Collection
-
-    // Consumer control report: one 16-bit usage (for example Volume Increment).
-    0x05, 0x0C,                                      // Usage Page (Consumer)
-    0x09, 0x01,                                      // Usage (Consumer Control)
-    0xA1, 0x01,                                      // Collection (Application)
-    0x85, BluetoothPageTurnerHid::CONSUMER_REPORT_ID,  //   Report ID
-    0x15, 0x00,                                      //   Logical Minimum (0)
-    0x26, 0xFF, 0x03,                                //   Logical Maximum (0x03FF)
-    0x19, 0x00,                                      //   Usage Minimum (Unassigned)
-    0x2A, 0xFF, 0x03,                                //   Usage Maximum (0x03FF)
-    0x95, 0x01,                                      //   Report Count (1)
-    0x75, 0x10,                                      //   Report Size (16)
-    0x81, 0x00,                                      //   Input (Data, Array, Absolute)
-    0xC0,                                            // End Collection
 };
 
 struct KeyboardReport {
@@ -179,7 +165,6 @@ bool BluetoothPageTurnerActivity::startBle() {
   hidDevice->hidInfo(0x00, 0x01);
   hidDevice->reportMap(const_cast<uint8_t*>(HID_REPORT_MAP), sizeof(HID_REPORT_MAP));
   keyboardInput = hidDevice->inputReport(BluetoothPageTurnerHid::KEYBOARD_REPORT_ID);
-  consumerInput = hidDevice->inputReport(BluetoothPageTurnerHid::CONSUMER_REPORT_ID);
   lastBatteryLevel = 255;
   lastBatteryLevelUpdateMs = 0;
   updateBatteryLevel(true);
@@ -221,7 +206,6 @@ void BluetoothPageTurnerActivity::stopBle() {
   serverCallbacks = nullptr;
   hidDevice = nullptr;
   keyboardInput = nullptr;
-  consumerInput = nullptr;
 
   if (BLEDevice::getInitialized()) {
     BLEDevice::stopAdvertising();
@@ -294,12 +278,7 @@ void BluetoothPageTurnerActivity::sendPageTurn(bool next) {
 
   const auto profile =
       static_cast<CrossPointSettings::BLUETOOTH_PAGE_TURNER_KEYS>(SETTINGS.bluetoothPageTurnerKeys);
-  const auto report = BluetoothPageTurnerHid::resolvePageTurn(profile, next);
-  if (report.kind == BluetoothPageTurnerHid::ReportKind::Consumer) {
-    sendConsumerKey(report.usage);
-  } else {
-    sendKeyboardKey(static_cast<uint8_t>(report.usage));
-  }
+  sendKeyboardKey(BluetoothPageTurnerHid::resolvePageTurn(profile, next));
 }
 
 void BluetoothPageTurnerActivity::sendKeyboardKey(uint8_t usage) {
@@ -322,33 +301,12 @@ void BluetoothPageTurnerActivity::sendKeyboardKey(uint8_t usage) {
   keyboardInput->notify();
 }
 
-void BluetoothPageTurnerActivity::sendConsumerKey(uint16_t usage) {
-  if (!consumerInput || !server || server->getConnectedCount() == 0) {
-    return;
-  }
-
-  const auto report = BluetoothPageTurnerHid::encodeConsumerUsage(usage);
-  consumerInput->setValue(report.bytes, sizeof(report.bytes));
-  consumerInput->notify();
-
-  delay(8);
-  if (!server || server->getConnectedCount() == 0) {
-    return;
-  }
-
-  const auto releaseReport = BluetoothPageTurnerHid::encodeConsumerUsage(0);
-  consumerInput->setValue(releaseReport.bytes, sizeof(releaseReport.bytes));
-  consumerInput->notify();
-}
-
 const char* BluetoothPageTurnerActivity::getProfileLabel() const {
   switch (static_cast<CrossPointSettings::BLUETOOTH_PAGE_TURNER_KEYS>(SETTINGS.bluetoothPageTurnerKeys)) {
     case CrossPointSettings::BT_KEYS_LEFT_RIGHT:
       return tr(STR_BT_KEYS_LEFT_RIGHT);
     case CrossPointSettings::BT_KEYS_UP_DOWN:
       return tr(STR_BT_KEYS_UP_DOWN);
-    case CrossPointSettings::BT_KEYS_VOLUME_UP_DOWN:
-      return tr(STR_BT_KEYS_VOLUME_UP_DOWN);
     case CrossPointSettings::BT_KEYS_PAGE_UP_DOWN:
     default:
       return tr(STR_BT_KEYS_PAGE_UP_DOWN);

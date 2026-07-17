@@ -104,7 +104,6 @@ class CrossPointSettings {
     BT_KEYS_PAGE_UP_DOWN = 0,
     BT_KEYS_LEFT_RIGHT = 1,
     BT_KEYS_UP_DOWN = 2,
-    BT_KEYS_VOLUME_UP_DOWN = 3,
     BLUETOOTH_PAGE_TURNER_KEYS_COUNT
   };
 
