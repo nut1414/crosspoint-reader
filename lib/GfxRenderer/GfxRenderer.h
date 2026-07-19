@@ -28,6 +28,7 @@ enum Color : uint8_t { Clear = 0x00, White = 0x01, LightGray = 0x05, DarkGray = 
 class GfxRenderer {
  public:
   enum RenderMode { BW, GRAYSCALE_LSB, GRAYSCALE_MSB };
+  enum class TextRasterMode { SOLID, DITHERED };
 
   // Logical screen orientation from the perspective of callers
   enum Orientation {
@@ -42,6 +43,7 @@ class GfxRenderer {
 
   HalDisplay& display;
   RenderMode renderMode;
+  TextRasterMode textRasterMode;
   Orientation orientation;
   bool fadingFix;
   uint8_t* frameBuffer = nullptr;
@@ -90,7 +92,11 @@ class GfxRenderer {
 
  public:
   explicit GfxRenderer(HalDisplay& halDisplay)
-      : display(halDisplay), renderMode(BW), orientation(Portrait), fadingFix(false) {}
+      : display(halDisplay),
+        renderMode(BW),
+        textRasterMode(TextRasterMode::SOLID),
+        orientation(Portrait),
+        fadingFix(false) {}
   ~GfxRenderer() { freeBwBufferChunks(); }
 
   static constexpr int VIEWABLE_MARGIN_TOP = 9;
@@ -127,6 +133,9 @@ class GfxRenderer {
   // Orientation control (affects logical width/height and coordinate transforms)
   void setOrientation(const Orientation o) { orientation = o; }
   Orientation getOrientation() const { return orientation; }
+
+  void setTextRasterMode(const TextRasterMode mode) { textRasterMode = mode; }
+  TextRasterMode getTextRasterMode() const { return textRasterMode; }
 
   // Fading fix control
   void setFadingFix(const bool enabled) { fadingFix = enabled; }

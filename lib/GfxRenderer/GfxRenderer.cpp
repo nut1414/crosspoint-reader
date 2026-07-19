@@ -9,6 +9,7 @@
 
 #include <algorithm>
 
+#include "CoverageDither.h"
 #include "FontCacheManager.h"
 
 namespace {
@@ -172,6 +173,7 @@ static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMod
       for (int dstX = 0; dstX < dstW; dstX++) {
         const int srcX = dstX * 2;
         uint8_t coverage = 0;
+        uint8_t sampleCount = 0;
         uint8_t maxRaw = 0;
         for (int sampleY = 0; sampleY < 2 && srcY + sampleY < srcH; sampleY++) {
           for (int sampleX = 0; sampleX < 2 && srcX + sampleX < srcW; sampleX++) {
@@ -179,10 +181,18 @@ static void renderCharScaled(const GfxRenderer& renderer, GfxRenderer::RenderMod
             const uint8_t byte = bitmap[pos >> 2];
             const uint8_t raw = (byte >> ((3 - (pos & 3)) * 2)) & 0x3;
             coverage += raw;
+            sampleCount++;
             if (raw > maxRaw) maxRaw = raw;
           }
         }
-        if (maxRaw >= 2 || coverage >= 2) {
+        const int screenX = baseX + dstX;
+        const int screenY = baseY + dstY;
+        if (renderMode == GfxRenderer::BW && renderer.getTextRasterMode() == GfxRenderer::TextRasterMode::DITHERED) {
+          const uint8_t averagedCoverage = static_cast<uint8_t>((coverage + sampleCount / 2) / sampleCount);
+          if (coverageDither::isBlack(averagedCoverage, screenX, screenY)) {
+            renderer.drawPixel(screenX, screenY, pixelState);
+          }
+        } else if (maxRaw >= 2 || coverage >= 2) {
           renderer.drawPixel(baseX + dstX, baseY + dstY, pixelState);
         }
       }
@@ -276,12 +286,18 @@ static void renderCharImpl(const GfxRenderer& renderer, GfxRenderer::RenderMode 
 
           const uint8_t byte = bitmap[pixelPosition >> 2];
           const uint8_t bit_index = (3 - (pixelPosition & 3)) * 2;
-          // the direct bit from the font is 0 -> white, 1 -> light gray, 2 -> dark gray, 3 -> black
+          // The direct value from the font is 0 -> white, 1 -> light gray,
+          // 2 -> dark gray, 3 -> black.
+          const uint8_t coverage = (byte >> bit_index) & 0x3;
           // we swap this to better match the way images and screen think about colors:
           // 0 -> black, 1 -> dark grey, 2 -> light grey, 3 -> white
-          const uint8_t bmpVal = 3 - ((byte >> bit_index) & 0x3);
+          const uint8_t bmpVal = 3 - coverage;
 
-          if (renderMode == GfxRenderer::BW && bmpVal < 3) {
+          if (renderMode == GfxRenderer::BW && renderer.getTextRasterMode() == GfxRenderer::TextRasterMode::DITHERED) {
+            if (coverageDither::isBlack(coverage, screenX, screenY)) {
+              renderer.drawPixel(screenX, screenY, pixelState);
+            }
+          } else if (renderMode == GfxRenderer::BW && bmpVal < 3) {
             // Black (also paints over the grays in BW mode)
             renderer.drawPixel(screenX, screenY, pixelState);
           } else if (renderMode == GfxRenderer::GRAYSCALE_MSB && (bmpVal == 1 || bmpVal == 2)) {

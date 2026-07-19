@@ -1,6 +1,7 @@
 #pragma once
 
 #include <HalClock.h>
+#include <HalGPIO.h>
 #include <HalTiltSensor.h>
 #include <I18n.h>
 #include <SdCardFontRegistry.h>
@@ -304,6 +305,17 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Toggle(StrId::STR_CLOCK_SYNCED, &CrossPointSettings::clockHasBeenSynced, "clockHasBeenSynced",
                             StrId::STR_CUSTOMISE_STATUS_BAR),
     };
+    // X3 can use one-pass ordered dithering as an alternative to the visible
+    // second grayscale text update. Keep X4's existing boolean setting.
+    if (gpio.deviceIsX3()) {
+      const auto textAaSetting = std::find_if(
+          v.begin(), v.end(), [](const SettingInfo& setting) { return setting.nameId == StrId::STR_TEXT_AA; });
+      if (textAaSetting != v.end()) {
+        *textAaSetting = SettingInfo::Enum(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing,
+                                           {StrId::STR_STATE_OFF, StrId::STR_AA_GRAYSCALE, StrId::STR_AA_DITHERED},
+                                           "textAntiAliasing", StrId::STR_CAT_READER);
+      }
+    }
     // Only show tilt page turn setting when the QMI8658 IMU is present (X3)
     if (halTiltSensor.isAvailable()) {
       // Insert after the short power button setting (end of Controls section)

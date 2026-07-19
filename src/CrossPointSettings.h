@@ -115,6 +115,7 @@ class CrossPointSettings {
   // Font size options
   enum FONT_SIZE { SMALL = 0, MEDIUM = 1, LARGE = 2, EXTRA_LARGE = 3, FONT_SIZE_COUNT };
   enum LINE_COMPRESSION { TIGHT = 0, NORMAL = 1, WIDE = 2, LINE_COMPRESSION_COUNT };
+  enum TEXT_ANTI_ALIASING_MODE { TEXT_AA_OFF = 0, TEXT_AA_GRAYSCALE = 1, TEXT_AA_DITHERED = 2, TEXT_AA_MODE_COUNT };
   enum PARAGRAPH_ALIGNMENT {
     JUSTIFIED = 0,
     LEFT_ALIGN = 1,
@@ -219,7 +220,8 @@ class CrossPointSettings {
   uint8_t clockHasBeenSynced = 0;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
-  uint8_t textAntiAliasing = 1;
+  // Persisted values 0/1 retain their original off/grayscale meaning.
+  uint8_t textAntiAliasing = TEXT_AA_GRAYSCALE;
   // Short power button click behaviour
   uint8_t shortPwrBtn = IGNORE;
   // EPUB reading orientation settings

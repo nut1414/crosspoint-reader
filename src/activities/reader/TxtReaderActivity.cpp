@@ -421,13 +421,16 @@ void TxtReaderActivity::renderPage() {
   renderLines();  // scan pass — text accumulated, no drawing
   scope.endScanAndPrewarm();
 
-  // BW rendering
-  renderLines();
-  renderStatusBar();
+  // BW rendering. One-pass AA affects glyph coverage only; the framebuffer
+  // still follows the normal single-refresh path.
+  ReaderUtils::renderWithTextRasterMode(renderer, [this, &renderLines]() {
+    renderLines();
+    renderStatusBar();
+  });
 
   ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
 
-  if (SETTINGS.textAntiAliasing) {
+  if (ReaderUtils::usesGrayscaleTextAntiAliasing()) {
     ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); });
   }
   // scope destructor clears font cache via FontCacheManager

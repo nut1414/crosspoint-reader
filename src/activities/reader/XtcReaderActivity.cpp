@@ -7,6 +7,7 @@
 
 #include "XtcReaderActivity.h"
 
+#include <CoverageDither.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
@@ -291,6 +292,31 @@ void XtcReaderActivity::renderPage() {
       const uint8_t bit2 = (plane2[byteOffset] >> bitInByte) & 1;
       return (bit1 << 1) | bit2;
     };
+
+    if (!ReaderUtils::usesGrayscaleTextAntiAliasing()) {
+      const bool dithered = ReaderUtils::usesDitheredTextAntiAliasing();
+      for (uint16_t y = 0; y < pageHeight; y++) {
+        for (uint16_t x = 0; x < pageWidth; x++) {
+          const uint8_t pixelValue = getPixelValue(x, y);
+          bool drawBlack = pixelValue != 0;
+          if (dithered) {
+            // XTH encodes 1 as dark gray and 2 as light gray, opposite the
+            // font coverage helper's intermediate-level ordering.
+            const uint8_t coverage = pixelValue == 1 ? 2 : pixelValue == 2 ? 1 : pixelValue;
+            drawBlack = coverageDither::isBlack(coverage, x, y);
+          }
+          if (drawBlack) {
+            renderer.drawPixel(x, y, true);
+          }
+        }
+      }
+
+      ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+      free(pageBuffer);
+      LOG_DBG("XTR", "Rendered page %lu/%lu (2-bit %s)", currentPage + 1, xtc->getPageCount(),
+              dithered ? "one-pass dithered" : "black-and-white");
+      return;
+    }
 
     // Optimized grayscale rendering without storeBwBuffer (saves 48KB peak memory)
     // Flow: BW display → LSB/MSB passes → grayscale display → re-render BW for next frame

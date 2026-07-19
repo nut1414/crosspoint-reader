@@ -69,6 +69,23 @@ inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntil
   }
 }
 
+inline bool usesGrayscaleTextAntiAliasing() {
+  return SETTINGS.textAntiAliasing == CrossPointSettings::TEXT_AA_GRAYSCALE;
+}
+
+inline bool usesDitheredTextAntiAliasing() { return SETTINGS.textAntiAliasing == CrossPointSettings::TEXT_AA_DITHERED; }
+
+// Apply the configured one-pass text raster policy only for the supplied
+// render. Images continue to see the normal BW render mode.
+template <typename RenderFn>
+void renderWithTextRasterMode(GfxRenderer& renderer, RenderFn&& renderFn) {
+  const auto previousMode = renderer.getTextRasterMode();
+  renderer.setTextRasterMode(usesDitheredTextAntiAliasing() ? GfxRenderer::TextRasterMode::DITHERED
+                                                            : GfxRenderer::TextRasterMode::SOLID);
+  renderFn();
+  renderer.setTextRasterMode(previousMode);
+}
+
 // Grayscale anti-aliasing pass. Renders content twice (LSB + MSB) to build
 // the grayscale buffer. Only the content callback is re-rendered — status bars
 // and other overlays should be drawn before calling this.

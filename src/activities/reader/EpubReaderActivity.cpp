@@ -1178,7 +1178,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
   const auto tPrewarm = millis();
 
   const bool pageHasImages = page->hasImages();
-  const bool needsTextGrayscale = SETTINGS.textAntiAliasing;
+  const bool needsTextGrayscale = ReaderUtils::usesGrayscaleTextAntiAliasing();
   const bool needsAnyGrayscale = needsTextGrayscale || pageHasImages;
   auto renderGrayscalePass = [&]() {
     if (needsTextGrayscale) {
@@ -1188,8 +1188,13 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
     }
   };
 
-  page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop);
-  renderStatusBar();
+  auto renderBwPage = [&]() {
+    ReaderUtils::renderWithTextRasterMode(
+        renderer, [&]() { page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop); });
+  };
+
+  renderBwPage();
+  ReaderUtils::renderWithTextRasterMode(renderer, [this]() { renderStatusBar(); });
   const auto tBwRender = millis();
 
   if (pageHasImages) {
@@ -1205,7 +1210,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int or
 
       // Re-render page content to restore images into the blanked area
       // Status bar is not re-rendered here to avoid reading stale dynamic values (e.g. battery %)
-      page->render(renderer, fontId, orientedMarginLeft, orientedMarginTop);
+      renderBwPage();
       renderer.displayBuffer(HalDisplay::FAST_REFRESH);
     } else {
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
