@@ -451,10 +451,18 @@ void EpubReaderActivity::loop() {
     return;
   }
 
-  // At end of the book, forward button goes home and back button returns to last page
+  // At end of the book, forward leaves the reader and back returns to the last page.
   if (currentSpineIndex > 0 && currentSpineIndex >= epub->getSpineItemsCount()) {
     if (nextTriggered) {
-      onGoHome();
+      if (SETTINGS.browseBookFolderOnFinish) {
+        // Browsing the original folder takes precedence over moving this EPUB to /read.
+        // Clear the pending move before ActivityManager calls onExit() so the current
+        // path remains valid and FileBrowserActivity can highlight it.
+        pendingReadFolderMove = false;
+        activityManager.goToFileBrowser(epub->getPath());
+      } else {
+        onGoHome();
+      }
     } else {
       currentSpineIndex = epub->getSpineItemsCount() - 1;
       nextPageNumber = 0;

@@ -283,6 +283,8 @@ The Settings screen allows you to configure the device's behavior. There are a f
 
 - **Time to Sleep**: Set the duration of inactivity before the device automatically goes to sleep; options are 1, 3, 5, 10 (default), 15 or 30 minutes.
 
+- **Browse Book Folder When Finished**: When enabled, advancing from the **End of Book** screen in EPUB or XTC, or advancing from the final page of a TXT or Markdown book, opens the book's containing folder with that book highlighted. If **Move Finished Books to Read Folder** is also enabled, automatic folder browsing takes precedence and leaves the EPUB in its original folder; explicitly leaving through Back/Home still uses the configured move behavior.
+
 - **Wi-Fi Networks**: Connect to Wi-Fi networks for file transfers and firmware updates.
 
 - **KOReader Sync**: Options for setting up KOReader for syncing book progress.

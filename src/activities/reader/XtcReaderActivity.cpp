@@ -99,10 +99,14 @@ void XtcReaderActivity::loop() {
     return;
   }
 
-  // At end of the book, forward button goes home and back button returns to last page
+  // At end of the book, forward leaves the reader and back returns to the last page.
   if (currentPage >= xtc->getPageCount()) {
     if (nextTriggered) {
-      onGoHome();
+      if (SETTINGS.browseBookFolderOnFinish) {
+        activityManager.goToFileBrowser(xtc->getPath());
+      } else {
+        onGoHome();
+      }
     } else {
       currentPage = xtc->getPageCount() - 1;
       requestUpdate();

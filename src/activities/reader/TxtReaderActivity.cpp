@@ -101,7 +101,11 @@ void TxtReaderActivity::loop() {
       currentPage++;
       requestUpdate();
     } else {
-      onGoHome();
+      if (SETTINGS.browseBookFolderOnFinish) {
+        activityManager.goToFileBrowser(txt->getPath());
+      } else {
+        onGoHome();
+      }
     }
   }
 }

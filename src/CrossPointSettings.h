@@ -279,6 +279,9 @@ class CrossPointSettings {
   uint8_t removeReadBooksFromRecents = 0;
   // Move epub to /Read/ folder on SD card when finished (0 = disabled, 1 = enabled)
   uint8_t moveFinishedToReadFolder = 0;
+  // Open the finished book's folder with the book highlighted instead of returning Home
+  // (0 = disabled, 1 = enabled)
+  uint8_t browseBookFolderOnFinish = 0;
   // Image rendering mode in EPUB reader
   uint8_t imageRendering = IMAGES_DISPLAY;
   // Auto pre-cache images when opening an EPUB that has no section cache yet
