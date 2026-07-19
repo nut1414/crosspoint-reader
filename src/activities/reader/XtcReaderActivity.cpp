@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include "BookOptionsMenuActivity.h"
+#include "BookLogStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
@@ -42,6 +43,7 @@ void XtcReaderActivity::onEnter() {
   APP_STATE.saveToFile();
   RECENT_BOOKS.addBook(xtc->getPath(), xtc->getTitle(), xtc->getAuthor(), xtc->getThumbBmpPath());
 
+  BOOK_LOG.recordBook(xtc->getPath(), xtc->getTitle(), xtc->getAuthor());
   // Trigger first update
   requestUpdate();
 }

@@ -24,6 +24,7 @@ enum class SettingAction {
   SdFirmwareUpdate,
   Language,
   FilesManagement,
+  BookLog,
   DownloadFonts,
   BluetoothPageTurner,
 };

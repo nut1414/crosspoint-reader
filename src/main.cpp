@@ -18,6 +18,7 @@
 
 #include <cstring>
 
+#include "BookLogStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "KOReaderCredentialStore.h"
@@ -379,6 +380,7 @@ void setup() {
   SETTINGS.loadFromFile();
   APP_STATE.loadFromFile();
   RECENT_BOOKS.loadFromFile();
+  BOOK_LOG.loadOrInitializeFromRecentBooks(RECENT_BOOKS.getBooks());
   I18N.setLanguage(static_cast<Language>(SETTINGS.language));
   KOREADER_STORE.loadFromFile();
   OPDS_STORE.loadFromFile();

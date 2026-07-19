@@ -8,6 +8,7 @@
 #include <Serialization.h>
 #include <Utf8.h>
 
+#include "BookLogStore.h"
 #include "BookOptionsMenuActivity.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -42,6 +43,7 @@ void TxtReaderActivity::onEnter() {
   APP_STATE.openEpubPath = filePath;
   APP_STATE.saveToFile();
   RECENT_BOOKS.addBook(filePath, fileName, "", "");
+  BOOK_LOG.recordBook(filePath, fileName, "");
 
   // Trigger first update
   requestUpdate();
