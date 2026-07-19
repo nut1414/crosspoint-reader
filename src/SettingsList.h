@@ -262,6 +262,14 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
               KOREADER_STORE.saveToFile();
             },
             "koMatchMethod", StrId::STR_KOREADER_SYNC),
+        SettingInfo::DynamicEnum(
+            StrId::STR_WIFI_CONNECTION, {StrId::STR_SMART, StrId::STR_CHOOSE_EVERY_TIME, StrId::STR_AUTO_CONNECT_LAST},
+            [] { return static_cast<uint8_t>(KOREADER_STORE.getWifiConnectionMode()); },
+            [](uint8_t v) {
+              KOREADER_STORE.setWifiConnectionMode(normalizeKOReaderWifiConnectionMode(v));
+              KOREADER_STORE.saveToFile();
+            },
+            "koWifiConnectionMode", StrId::STR_KOREADER_SYNC),
         // --- Status Bar Settings (web-only, uses StatusBarSettingsActivity) ---
         SettingInfo::Toggle(StrId::STR_CHAPTER_PAGE_COUNT, &CrossPointSettings::statusBarChapterPageCount,
                             "statusBarChapterPageCount", StrId::STR_CUSTOMISE_STATUS_BAR),

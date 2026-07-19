@@ -112,6 +112,9 @@ bool KOReaderCredentialStore::loadFromBinaryFile() {
     matchMethod = DocumentMatchMethod::FILENAME;
   }
 
+  // Legacy binary files predate this setting.
+  wifiConnectionMode = KOReaderWifiConnectionMode::SMART;
+
   LOG_DBG("KRS", "Loaded KOReader credentials from binary for user: %s", username.c_str());
   return true;
 }
@@ -172,4 +175,9 @@ std::string KOReaderCredentialStore::getBaseUrl() const {
 void KOReaderCredentialStore::setMatchMethod(DocumentMatchMethod method) {
   matchMethod = method;
   LOG_DBG("KRS", "Set match method: %s", method == DocumentMatchMethod::FILENAME ? "Filename" : "Binary");
+}
+
+void KOReaderCredentialStore::setWifiConnectionMode(const KOReaderWifiConnectionMode mode) {
+  wifiConnectionMode = normalizeKOReaderWifiConnectionMode(static_cast<uint8_t>(mode));
+  LOG_DBG("KRS", "Set WiFi connection mode: %u", static_cast<unsigned>(wifiConnectionMode));
 }

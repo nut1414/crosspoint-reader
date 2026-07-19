@@ -5,7 +5,7 @@
 
 /**
  * Submenu for KOReader Sync settings.
- * Shows username, password, and authenticate options.
+ * Shows credentials, server, document matching, WiFi connection, and authentication options.
  */
 class KOReaderSettingsActivity final : public Activity {
  public:

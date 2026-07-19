@@ -253,7 +253,9 @@ void SettingsActivity::toggleCurrentSetting() {
         startActivityForResult(std::make_unique<WebDAVServerListActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::Network:
-        startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, false), resultHandler);
+        startActivityForResult(
+            std::make_unique<WifiSelectionActivity>(renderer, mappedInput, WifiConnectionPolicy::CHOOSE_EVERY_TIME),
+            resultHandler);
         break;
       case SettingAction::FilesManagement:
         startActivityForResult(std::make_unique<FilesManagementActivity>(renderer, mappedInput), resultHandler);

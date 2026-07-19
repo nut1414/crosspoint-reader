@@ -7,18 +7,11 @@
 #include <vector>
 
 #include "activities/Activity.h"
+#include "activities/network/WifiSelectionPolicy.h"
 #include "util/ButtonNavigator.h"
 
 struct Rect;
 struct ThemeMetrics;
-
-// Structure to hold WiFi network information
-struct WifiNetworkInfo {
-  std::string ssid;
-  int32_t rssi;
-  bool isEncrypted;
-  bool hasSavedPassword;  // Whether we have saved credentials for this network
-};
 
 // WiFi selection states
 enum class WifiSelectionState {
@@ -68,8 +61,8 @@ class WifiSelectionActivity final : public Activity {
   // Whether network was connected using a saved password (skip save prompt)
   bool usedSavedPassword = false;
 
-  // Whether to attempt auto-connect on entry
-  const bool allowAutoConnect;
+  // Connection behavior to use when entering the selector
+  const WifiConnectionPolicy connectionPolicy;
 
   // Whether we are attempting to auto-connect
   bool autoConnecting = false;
@@ -93,6 +86,7 @@ class WifiSelectionActivity final : public Activity {
   void startWifiScan();
   void processWifiScanResults();
   void selectNetwork(int index);
+  void autoConnectSavedNetwork(int index);
   void attemptConnection();
   void checkConnectionStatus();
   std::string getSignalStrengthIndicator(int32_t rssi) const;
@@ -100,8 +94,9 @@ class WifiSelectionActivity final : public Activity {
   void onComplete(bool connected);
 
  public:
-  explicit WifiSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool autoConnect = true)
-      : Activity("WifiSelection", renderer, mappedInput), allowAutoConnect(autoConnect) {}
+  explicit WifiSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                 WifiConnectionPolicy policy = WifiConnectionPolicy::AUTO_CONNECT_LAST)
+      : Activity("WifiSelection", renderer, mappedInput), connectionPolicy(policy) {}
   void onEnter() override;
   void onExit() override;
   void loop() override;

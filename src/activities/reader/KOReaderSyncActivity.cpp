@@ -24,6 +24,19 @@
 #include "fontIds.h"
 
 namespace {
+WifiConnectionPolicy getWifiConnectionPolicy() {
+  switch (KOREADER_STORE.getWifiConnectionMode()) {
+    case KOReaderWifiConnectionMode::CHOOSE_EVERY_TIME:
+      return WifiConnectionPolicy::CHOOSE_EVERY_TIME;
+    case KOReaderWifiConnectionMode::AUTO_CONNECT_LAST:
+      return WifiConnectionPolicy::AUTO_CONNECT_LAST;
+    case KOReaderWifiConnectionMode::SMART:
+    case KOReaderWifiConnectionMode::COUNT:
+    default:
+      return WifiConnectionPolicy::SMART;
+  }
+}
+
 void syncTimeWithNTP() {
   // Stop SNTP if already running (can't reconfigure while running)
   if (esp_sntp_enabled()) {
@@ -251,7 +264,7 @@ void KOReaderSyncActivity::onEnter() {
 
   // Launch WiFi selection subactivity
   LOG_DBG("KOSync", "Launching WifiSelectionActivity...");
-  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
+  startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, getWifiConnectionPolicy()),
                          [this](const ActivityResult& result) { onWifiSelectionComplete(!result.isCancelled); });
 }
 

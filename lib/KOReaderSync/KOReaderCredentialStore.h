@@ -8,6 +8,13 @@ enum class DocumentMatchMethod : uint8_t {
   BINARY = 1,    // Match by partial MD5 of file content (more accurate, but files must be identical)
 };
 
+enum class KOReaderWifiConnectionMode : uint8_t { SMART = 0, CHOOSE_EVERY_TIME = 1, AUTO_CONNECT_LAST = 2, COUNT };
+
+constexpr KOReaderWifiConnectionMode normalizeKOReaderWifiConnectionMode(const uint8_t value) {
+  if (value >= static_cast<uint8_t>(KOReaderWifiConnectionMode::COUNT)) return KOReaderWifiConnectionMode::SMART;
+  return static_cast<KOReaderWifiConnectionMode>(value);
+}
+
 /**
  * Singleton class for storing KOReader sync credentials on the SD card.
  * Passwords are XOR-obfuscated with the device's unique hardware MAC address
@@ -21,6 +28,7 @@ class KOReaderCredentialStore {
   std::string password;
   std::string serverUrl;                                            // Custom sync server URL (empty = default)
   DocumentMatchMethod matchMethod = DocumentMatchMethod::FILENAME;  // Default to filename for compatibility
+  KOReaderWifiConnectionMode wifiConnectionMode = KOReaderWifiConnectionMode::SMART;
 
   // Private constructor for singleton
   KOReaderCredentialStore() = default;
@@ -63,6 +71,10 @@ class KOReaderCredentialStore {
   // Document matching method
   void setMatchMethod(DocumentMatchMethod method);
   DocumentMatchMethod getMatchMethod() const { return matchMethod; }
+
+  // WiFi connection behavior used by progress sync
+  void setWifiConnectionMode(KOReaderWifiConnectionMode mode);
+  KOReaderWifiConnectionMode getWifiConnectionMode() const { return wifiConnectionMode; }
 };
 
 // Helper macro to access credential store

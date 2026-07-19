@@ -48,7 +48,7 @@ void WifiSelectionActivity::onEnter() {
   requestUpdate();
 
   // Attempt to auto-connect to the last network
-  if (allowAutoConnect) {
+  if (shouldTryLastNetworkOnEntry(connectionPolicy)) {
     const std::string lastSsid = WIFI_STORE.getLastConnectedSsid();
     if (!lastSsid.empty()) {
       const auto* cred = WIFI_STORE.findCredential(lastSsid);
@@ -156,6 +156,15 @@ void WifiSelectionActivity::processWifiScanResults() {
   WiFi.scanDelete();
   state = WifiSelectionState::NETWORK_LIST;
   selectedNetworkIndex = 0;
+
+  if (shouldAutoConnectAfterScan(connectionPolicy)) {
+    const int candidateIndex = findSingleUsableSavedNetwork(networks, WIFI_STORE.getCredentials());
+    if (candidateIndex >= 0) {
+      autoConnectSavedNetwork(candidateIndex);
+      return;
+    }
+  }
+
   requestUpdate();
 }
 
@@ -202,6 +211,23 @@ void WifiSelectionActivity::selectNetwork(const int index) {
     // Connect directly for open networks
     attemptConnection();
   }
+}
+
+void WifiSelectionActivity::autoConnectSavedNetwork(const int index) {
+  if (index < 0 || index >= static_cast<int>(networks.size())) return;
+
+  const auto& network = networks[index];
+  const auto* credential = WIFI_STORE.findCredential(network.ssid);
+  if (!credential || (network.isEncrypted && credential->password.empty())) return;
+
+  selectedNetworkIndex = static_cast<size_t>(index);
+  selectedSSID = network.ssid;
+  selectedRequiresPassword = network.isEncrypted;
+  enteredPassword = credential->password;
+  usedSavedPassword = true;
+  autoConnecting = true;
+  LOG_DBG("WIFI", "Smart auto-connect selected %s", selectedSSID.c_str());
+  attemptConnection();
 }
 
 void WifiSelectionActivity::attemptConnection() {

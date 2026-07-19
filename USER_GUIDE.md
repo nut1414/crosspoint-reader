@@ -376,6 +376,8 @@ When this returns `HTTP 402` with `{"code":2002,"message":"Username is already r
    - Set **Username** and **Password** (enter the plain password; CrossPoint computes MD5 internally, and use the same values on all devices).
    
    - Set **Sync Server URL** to `https://sync.koreader.rocks`, or leave it empty (both use the same default KOReader sync server).
+
+   - Set **Wi-Fi Connection** to **Smart** (default), **Choose Every Time**, or **Auto-connect Last**. Smart scans first and connects automatically only when one usable saved network is visible.
    
    - Run **Authenticate**.
 
