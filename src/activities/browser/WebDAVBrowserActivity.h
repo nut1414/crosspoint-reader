@@ -7,6 +7,7 @@
 #include "../Activity.h"
 #include "WebDAVServerStore.h"
 #include "network/WebDAVClient.h"
+#include "network/WebDAVItemList.h"
 #include "util/ButtonNavigator.h"
 
 /**
@@ -28,7 +29,7 @@ class WebDAVBrowserActivity final : public Activity {
  private:
   ButtonNavigator buttonNavigator;
   BrowserState state = BrowserState::LOADING;
-  std::vector<WebDAVItem> items;
+  WebDAVItemList items;
   std::vector<std::string> navigationHistory;
   std::string currentUrl;
   int selectorIndex = 0;

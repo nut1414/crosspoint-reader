@@ -1,8 +1,10 @@
 #include <cstdio>
+#include <memory>
+#include <new>
 #include <string>
 #include <utility>
-#include <vector>
 
+#include "src/network/WebDAVItemList.h"
 #include "src/network/WebDAVPropfindParser.h"
 #include "src/network/WebDAVUrl.h"
 
@@ -44,16 +46,29 @@ static int testsFailed = 0;
 
 #define PASS() testsPassed++
 
-static std::vector<WebDAVItem> parsePropfind(const std::string& xml) {
-  WebDAVPropfindParser parser;
+static bool parsePropfind(const std::string& xml, WebDAVItemList& items, bool* truncated = nullptr) {
+  WebDAVPropfindParser parser{items};
+  if (parser.outOfMemory()) {
+    fprintf(stderr, "  FAIL: %s:%d: parser.outOfMemory()\n", __FILE__, __LINE__);
+    testsFailed++;
+    return false;
+  }
   parser.feed(xml.data(), xml.size());
   parser.finish();
   if (parser.error()) {
     fprintf(stderr, "  FAIL: %s:%d: parser.error()\n", __FILE__, __LINE__);
     testsFailed++;
-    return {};
+    return false;
   }
-  return std::move(parser.items);
+  if (truncated) *truncated = parser.truncated;
+  return true;
+}
+
+static WebDAVItemList::StoragePtr failStorageAllocation(size_t) noexcept { return {}; }
+
+static WebDAVItemList::StoragePtr allocateAtMost64Items(const size_t count) noexcept {
+  if (count > 64) return {};
+  return WebDAVItemList::StoragePtr{new (std::nothrow) WebDAVItem[count]};
 }
 
 void testResolveRootRelativeHrefUnderConfiguredBase() {
@@ -121,18 +136,19 @@ void testResolveItemsSkipsCurrentCollectionByUrl() {
       "</D:response>"
       "</D:multistatus>";
 
-  auto rawItems = parsePropfind(xml);
+  WebDAVItemList rawItems;
+  ASSERT_TRUE(parsePropfind(xml, rawItems));
   ASSERT_SIZE(rawItems.size(), 3u);
 
-  auto items = WebDAVUrl::resolveItems("https://host/webdav/", "https://host/webdav/", std::move(rawItems));
-  ASSERT_SIZE(items.size(), 2u);
-  ASSERT_EQ(items[0].href, "https://host/webdav/Book.epub");
-  ASSERT_EQ(items[0].name, "Book.epub");
-  ASSERT_TRUE(!items[0].isDirectory);
-  ASSERT_SIZE(items[0].size, 123u);
-  ASSERT_EQ(items[1].href, "https://host/webdav/Folder/");
-  ASSERT_EQ(items[1].name, "Folder");
-  ASSERT_TRUE(items[1].isDirectory);
+  WebDAVUrl::resolveItems("https://host/webdav/", "https://host/webdav/", rawItems);
+  ASSERT_SIZE(rawItems.size(), 2u);
+  ASSERT_EQ(rawItems[0].href, "https://host/webdav/Book.epub");
+  ASSERT_EQ(rawItems[0].name, "Book.epub");
+  ASSERT_TRUE(!rawItems[0].isDirectory);
+  ASSERT_SIZE(rawItems[0].size, 123u);
+  ASSERT_EQ(rawItems[1].href, "https://host/webdav/Folder/");
+  ASSERT_EQ(rawItems[1].name, "Folder");
+  ASSERT_TRUE(rawItems[1].isDirectory);
 
   printf("  passed\n");
   PASS();
@@ -141,26 +157,25 @@ void testResolveItemsSkipsCurrentCollectionByUrl() {
 void testResolveItemsReusesIncomingStorageWhileFilteringInOrder() {
   printf("testResolveItemsReusesIncomingStorageWhileFilteringInOrder...\n");
 
-  std::vector<WebDAVItem> rawItems{
-      {"/webdav/First.epub", "First.epub", false, 11},
-      {"/webdav/", "webdav", true, 0},
-      {"/webdav/Second.epub", "Second.epub", false, 22},
-  };
-  rawItems.reserve(200);
+  WebDAVItemList rawItems;
+  ASSERT_TRUE(rawItems.ensureStorage());
+  ASSERT_TRUE(rawItems.push_back({"/webdav/First.epub", "First.epub", false, 11}));
+  ASSERT_TRUE(rawItems.push_back({"/webdav/", "webdav", true, 0}));
+  ASSERT_TRUE(rawItems.push_back({"/webdav/Second.epub", "Second.epub", false, 22}));
   const WebDAVItem* const incomingStorage = rawItems.data();
   const size_t incomingCapacity = rawItems.capacity();
 
-  auto items = WebDAVUrl::resolveItems("https://host/webdav/", "https://host/webdav/", std::move(rawItems));
+  WebDAVUrl::resolveItems("https://host/webdav/", "https://host/webdav/", rawItems);
 
-  ASSERT_TRUE(items.data() == incomingStorage);
-  ASSERT_SIZE(items.capacity(), incomingCapacity);
-  ASSERT_SIZE(items.size(), 2u);
-  ASSERT_EQ(items[0].href, "https://host/webdav/First.epub");
-  ASSERT_EQ(items[0].name, "First.epub");
-  ASSERT_SIZE(items[0].size, 11u);
-  ASSERT_EQ(items[1].href, "https://host/webdav/Second.epub");
-  ASSERT_EQ(items[1].name, "Second.epub");
-  ASSERT_SIZE(items[1].size, 22u);
+  ASSERT_TRUE(rawItems.data() == incomingStorage);
+  ASSERT_SIZE(rawItems.capacity(), incomingCapacity);
+  ASSERT_SIZE(rawItems.size(), 2u);
+  ASSERT_EQ(rawItems[0].href, "https://host/webdav/First.epub");
+  ASSERT_EQ(rawItems[0].name, "First.epub");
+  ASSERT_SIZE(rawItems[0].size, 11u);
+  ASSERT_EQ(rawItems[1].href, "https://host/webdav/Second.epub");
+  ASSERT_EQ(rawItems[1].name, "Second.epub");
+  ASSERT_SIZE(rawItems[1].size, 22u);
 
   printf("  passed\n");
   PASS();
@@ -169,15 +184,94 @@ void testResolveItemsReusesIncomingStorageWhileFilteringInOrder() {
 void testParserReusesPreviousListingStorage() {
   printf("testParserReusesPreviousListingStorage...\n");
 
-  std::vector<WebDAVItem> previousItems;
-  previousItems.reserve(200);
-  previousItems.push_back({"stale", "stale", false, 0});
+  WebDAVItemList previousItems;
+  ASSERT_TRUE(previousItems.ensureStorage());
+  ASSERT_TRUE(previousItems.push_back({"stale", "stale", false, 0}));
   const WebDAVItem* const incomingStorage = previousItems.data();
 
-  WebDAVPropfindParser parser{std::move(previousItems)};
-  ASSERT_TRUE(parser.items.empty());
-  parser.items.push_back({"fresh", "fresh", false, 0});
-  ASSERT_TRUE(parser.items.data() == incomingStorage);
+  WebDAVPropfindParser parser{previousItems};
+  ASSERT_TRUE(previousItems.empty());
+  ASSERT_TRUE(previousItems.push_back({"fresh", "fresh", false, 0}));
+  ASSERT_TRUE(previousItems.data() == incomingStorage);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testParserReportsStorageAllocationFailure() {
+  printf("testParserReportsStorageAllocationFailure...\n");
+
+  WebDAVItemList items{&failStorageAllocation};
+  WebDAVPropfindParser parser{items};
+
+  ASSERT_TRUE(parser.outOfMemory());
+  ASSERT_TRUE(parser.error());
+  ASSERT_TRUE(items.empty());
+  ASSERT_SIZE(items.capacity(), 0u);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testListingFallsBackToSmallerContiguousStorage() {
+  printf("testListingFallsBackToSmallerContiguousStorage...\n");
+
+  WebDAVItemList items{&allocateAtMost64Items};
+  WebDAVPropfindParser parser{items};
+
+  ASSERT_TRUE(!parser.error());
+  ASSERT_SIZE(items.capacity(), 64u);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testMalformedResponseRetryRetainsStorage() {
+  printf("testMalformedResponseRetryRetainsStorage...\n");
+
+  WebDAVItemList items;
+  ASSERT_TRUE(items.ensureStorage());
+  const WebDAVItem* const storage = items.data();
+
+  {
+    WebDAVPropfindParser parser{items};
+    const std::string malformed = "<D:multistatus xmlns:D=\"DAV:\"><D:response>";
+    ASSERT_TRUE(parser.feed(malformed.data(), malformed.size()));
+    ASSERT_TRUE(!parser.finish());
+    ASSERT_TRUE(parser.error());
+  }
+
+  items.clear();
+  ASSERT_TRUE(items.data() == storage);
+
+  const std::string valid =
+      "<D:multistatus xmlns:D=\"DAV:\">"
+      "<D:response><D:href>/webdav/Book.epub</D:href></D:response>"
+      "</D:multistatus>";
+  ASSERT_TRUE(parsePropfind(valid, items));
+  ASSERT_TRUE(items.data() == storage);
+  ASSERT_SIZE(items.size(), 1u);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testParserTruncatesWithoutGrowingStorage() {
+  printf("testParserTruncatesWithoutGrowingStorage...\n");
+
+  std::string xml = "<D:multistatus xmlns:D=\"DAV:\">";
+  for (size_t i = 0; i <= WebDAVItemList::MAX_ITEMS; ++i) {
+    xml += "<D:response><D:href>/webdav/Book" + std::to_string(i) +
+           ".epub</D:href></D:response>";
+  }
+  xml += "</D:multistatus>";
+
+  WebDAVItemList items;
+  bool truncated = false;
+  ASSERT_TRUE(parsePropfind(xml, items, &truncated));
+  ASSERT_SIZE(items.capacity(), WebDAVItemList::MAX_ITEMS);
+  ASSERT_SIZE(items.size(), WebDAVItemList::MAX_ITEMS);
+  ASSERT_TRUE(truncated);
 
   printf("  passed\n");
   PASS();
@@ -191,6 +285,10 @@ int main() {
   testResolveItemsSkipsCurrentCollectionByUrl();
   testResolveItemsReusesIncomingStorageWhileFilteringInOrder();
   testParserReusesPreviousListingStorage();
+  testParserReportsStorageAllocationFailure();
+  testListingFallsBackToSmallerContiguousStorage();
+  testMalformedResponseRetryRetainsStorage();
+  testParserTruncatesWithoutGrowingStorage();
 
   printf("\nTests passed: %d\n", testsPassed);
   if (testsFailed > 0) {

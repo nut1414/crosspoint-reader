@@ -56,17 +56,22 @@ std::string hrefToName(const std::string& href) {
 
 }  // namespace
 
-WebDAVPropfindParser::WebDAVPropfindParser(std::vector<WebDAVItem>&& reusableItems)
-    : items(std::move(reusableItems)) {
+WebDAVPropfindParser::WebDAVPropfindParser(WebDAVItemList& output) : items(output) {
   items.clear();
+  if (!items.ensureStorage()) {
+    allocationFailed = true;
+    errorOccurred = true;
+    return;
+  }
+
   parser = XML_ParserCreate(nullptr);
   if (!parser) {
+    allocationFailed = true;
     errorOccurred = true;
   } else {
     XML_SetUserData(parser, this);
     XML_SetElementHandler(parser, startElement, endElement);
     XML_SetCharacterDataHandler(parser, characterData);
-    items.reserve(MAX_ITEMS);
   }
 }
 
@@ -82,6 +87,7 @@ bool WebDAVPropfindParser::feed(const char* xmlData, size_t length) {
   while (remaining > 0) {
     void* const buf = XML_GetBuffer(parser, chunkSize);
     if (!buf) {
+      allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
       errorOccurred = true;
       destroyXmlParser(parser);
       return false;
@@ -91,6 +97,7 @@ bool WebDAVPropfindParser::feed(const char* xmlData, size_t length) {
     memcpy(buf, currentPos, toRead);
 
     if (XML_ParseBuffer(parser, static_cast<int>(toRead), XML_FALSE) == XML_STATUS_ERROR) {
+      allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
       errorOccurred = true;
       destroyXmlParser(parser);
       return false;
@@ -104,6 +111,7 @@ bool WebDAVPropfindParser::feed(const char* xmlData, size_t length) {
 bool WebDAVPropfindParser::finish() {
   if (errorOccurred) return false;
   if (XML_Parse(parser, nullptr, 0, XML_TRUE) != XML_STATUS_OK) {
+    allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
     errorOccurred = true;
     destroyXmlParser(parser);
     return false;
@@ -139,14 +147,12 @@ void XMLCALL WebDAVPropfindParser::endElement(void* userData, const XML_Char* na
   const char* local = localName(name);
   if (strcmp(local, "response") == 0) {
     if (!self->current.href.empty()) {
-      if (self->items.size() < MAX_ITEMS) {
-        self->current.isDirectory = self->currentIsCollection;
-        self->current.name = hrefToName(self->current.href);
-        if (self->current.name.empty()) {
-          self->current.name = self->current.href;
-        }
-        self->items.push_back(std::move(self->current));
-      } else {
+      self->current.isDirectory = self->currentIsCollection;
+      self->current.name = hrefToName(self->current.href);
+      if (self->current.name.empty()) {
+        self->current.name = self->current.href;
+      }
+      if (!self->items.push_back(std::move(self->current))) {
         self->truncated = true;
       }
     }
@@ -154,7 +160,13 @@ void XMLCALL WebDAVPropfindParser::endElement(void* userData, const XML_Char* na
   } else if (strcmp(local, "href") == 0) {
     self->inHref = false;
     if (self->inResponse) {
-      self->current.href = self->currentText;
+      if (self->items.full()) {
+        // Keep parsing the XML stream, but avoid allocating href/name strings
+        // for entries that cannot fit in the bounded listing.
+        self->truncated = true;
+      } else {
+        self->current.href = self->currentText;
+      }
     }
   } else if (strcmp(local, "resourcetype") == 0) {
     self->inResourceType = false;

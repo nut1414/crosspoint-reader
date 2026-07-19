@@ -18,14 +18,17 @@
 void WebDAVBrowserActivity::onEnter() {
   Activity::onEnter();
 
-  state = BrowserState::CHECK_WIFI;
-  items.clear();
-  truncated = false;
-  navigationHistory.clear();
-  currentUrl = server.url;
-  selectorIndex = 0;
-  errorMessage.clear();
-  statusMessage = tr(STR_CHECKING_WIFI);
+  {
+    RenderLock lock(*this);
+    state = BrowserState::CHECK_WIFI;
+    items.clear();
+    truncated = false;
+    navigationHistory.clear();
+    currentUrl = server.url;
+    selectorIndex = 0;
+    errorMessage.clear();
+    statusMessage = tr(STR_CHECKING_WIFI);
+  }
   requestUpdate();
 
   checkAndConnectWifi();
@@ -46,9 +49,6 @@ void WebDAVBrowserActivity::loop() {
   if (state == BrowserState::ERROR) {
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       if (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
-        state = BrowserState::LOADING;
-        statusMessage = tr(STR_LOADING);
-        requestUpdate();
         fetchDirectory(currentUrl);
       } else {
         launchWifiSelection();
@@ -84,19 +84,31 @@ void WebDAVBrowserActivity::loop() {
 
     if (!items.empty()) {
       buttonNavigator.onNextRelease([this] {
-        selectorIndex = ButtonNavigator::nextIndex(selectorIndex, items.size());
+        {
+          RenderLock lock(*this);
+          selectorIndex = ButtonNavigator::nextIndex(selectorIndex, items.size());
+        }
         requestUpdate();
       });
       buttonNavigator.onPreviousRelease([this] {
-        selectorIndex = ButtonNavigator::previousIndex(selectorIndex, items.size());
+        {
+          RenderLock lock(*this);
+          selectorIndex = ButtonNavigator::previousIndex(selectorIndex, items.size());
+        }
         requestUpdate();
       });
       buttonNavigator.onNextContinuous([this] {
-        selectorIndex = ButtonNavigator::nextPageIndex(selectorIndex, items.size(), PAGE_ITEMS);
+        {
+          RenderLock lock(*this);
+          selectorIndex = ButtonNavigator::nextPageIndex(selectorIndex, items.size(), PAGE_ITEMS);
+        }
         requestUpdate();
       });
       buttonNavigator.onPreviousContinuous([this] {
-        selectorIndex = ButtonNavigator::previousPageIndex(selectorIndex, items.size(), PAGE_ITEMS);
+        {
+          RenderLock lock(*this);
+          selectorIndex = ButtonNavigator::previousPageIndex(selectorIndex, items.size(), PAGE_ITEMS);
+        }
         requestUpdate();
       });
     }
@@ -188,51 +200,62 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
 
 void WebDAVBrowserActivity::fetchDirectory(const std::string& url) {
   if (url.empty()) {
-    state = BrowserState::ERROR;
-    errorMessage = tr(STR_NO_SERVER_URL);
-    requestUpdate();
-    return;
-  }
-
-  LOG_DBG("WEBDAV", "Fetching directory: %s", url.c_str());
-  auto error = WebDAVClient::propfind(url, items, server.username, server.password, &truncated, server.url);
-
-  if (error != WebDAVError::OK) {
-    state = BrowserState::ERROR;
-    switch (error) {
-      case WebDAVError::AUTH_ERROR:
-        errorMessage = tr(STR_AUTH_FAILED);
-        break;
-      case WebDAVError::NETWORK_ERROR:
-        errorMessage = tr(STR_WIFI_CONN_FAILED);
-        break;
-      default:
-        errorMessage = tr(STR_FETCH_DIR_FAILED);
-        break;
+    {
+      RenderLock lock(*this);
+      state = BrowserState::ERROR;
+      errorMessage = tr(STR_NO_SERVER_URL);
     }
     requestUpdate();
     return;
   }
 
-  selectorIndex = 0;
-  state = BrowserState::BROWSING;
+  // Publish and render LOADING before the blocking request. While this state
+  // is visible, render() never indexes items, so the main task can safely
+  // clear and refill the reusable listing outside the render lock.
+  {
+    RenderLock lock(*this);
+    state = BrowserState::LOADING;
+    statusMessage = tr(STR_LOADING);
+    selectorIndex = 0;
+    truncated = false;
+  }
+  requestUpdateAndWait();
+
+  LOG_DBG("WEBDAV", "Fetching directory: %s", url.c_str());
+  auto error = WebDAVClient::propfind(url, items, server.username, server.password, &truncated, server.url);
+
+  {
+    RenderLock lock(*this);
+    if (error != WebDAVError::OK) {
+      state = BrowserState::ERROR;
+      switch (error) {
+        case WebDAVError::AUTH_ERROR:
+          errorMessage = tr(STR_AUTH_FAILED);
+          break;
+        case WebDAVError::NETWORK_ERROR:
+          errorMessage = tr(STR_WIFI_CONN_FAILED);
+          break;
+        default:
+          errorMessage = tr(STR_FETCH_DIR_FAILED);
+          break;
+      }
+    } else {
+      selectorIndex = 0;
+      state = BrowserState::BROWSING;
+    }
+  }
   requestUpdate();
 }
 
 void WebDAVBrowserActivity::navigateToItem(const WebDAVItem& item) {
+  const std::string itemUrl = item.href;
   navigationHistory.push_back(currentUrl);
-  currentUrl = item.href;
+  currentUrl = itemUrl;
   // Ensure directory URLs end with / for consistent PROPFIND behavior
   if (!currentUrl.empty() && currentUrl.back() != '/') {
     currentUrl += '/';
   }
 
-  state = BrowserState::LOADING;
-  statusMessage = tr(STR_LOADING);
-  items.clear();
-  truncated = false;
-  selectorIndex = 0;
-  requestUpdate(true);
   fetchDirectory(currentUrl);
 }
 
@@ -242,12 +265,6 @@ void WebDAVBrowserActivity::navigateBack() {
   } else {
     currentUrl = navigationHistory.back();
     navigationHistory.pop_back();
-    state = BrowserState::LOADING;
-    statusMessage = tr(STR_LOADING);
-    items.clear();
-    truncated = false;
-    selectorIndex = 0;
-    requestUpdate();
     fetchDirectory(currentUrl);
   }
 }
@@ -256,7 +273,10 @@ void WebDAVBrowserActivity::startDownload(const WebDAVItem& item) {
   pendingDownloadUrl = item.href;
   pendingDownloadName = item.name;
 
-  state = BrowserState::PICKING_DEST;
+  {
+    RenderLock lock(*this);
+    state = BrowserState::PICKING_DEST;
+  }
   requestUpdate();
 
   auto picker = std::make_unique<FolderPickerActivity>(renderer, mappedInput, "/");
@@ -265,17 +285,23 @@ void WebDAVBrowserActivity::startDownload(const WebDAVItem& item) {
       const auto& kb = std::get<KeyboardResult>(result.data);
       performDownload(kb.text);
     } else {
-      state = BrowserState::BROWSING;
+      {
+        RenderLock lock(*this);
+        state = BrowserState::BROWSING;
+      }
       requestUpdate();
     }
   });
 }
 
 void WebDAVBrowserActivity::performDownload(const std::string& destFolder) {
-  state = BrowserState::DOWNLOADING;
-  statusMessage = pendingDownloadName;
-  downloadProgress = downloadTotal = 0;
-  requestUpdate(true);
+  {
+    RenderLock lock(*this);
+    state = BrowserState::DOWNLOADING;
+    statusMessage = pendingDownloadName;
+    downloadProgress = downloadTotal = 0;
+  }
+  requestUpdateAndWait();
 
   std::string destPath = destFolder;
   if (!destPath.empty() && destPath.back() != '/') {
@@ -285,11 +311,23 @@ void WebDAVBrowserActivity::performDownload(const std::string& destFolder) {
 
   LOG_DBG("WEBDAV", "Downloading: %s -> %s", pendingDownloadUrl.c_str(), destPath.c_str());
 
+  // HttpDownloader reports every read chunk. Limit e-paper refreshes to roughly
+  // ten per file (and at least 64 KiB apart) so rendering cannot stall the
+  // synchronous network transfer long enough to trigger a timeout.
+  size_t lastPublishedProgress = 0;
   auto error = WebDAVClient::downloadFile(
       pendingDownloadUrl, destPath,
-      [this](const size_t downloaded, const size_t total) {
-        downloadProgress = downloaded;
-        downloadTotal = total;
+      [this, &lastPublishedProgress](const size_t downloaded, const size_t total) {
+        constexpr size_t MIN_PROGRESS_STEP = 64 * 1024;
+        const size_t tenPercentStep = total / 10;
+        const size_t updateStep = tenPercentStep > MIN_PROGRESS_STEP ? tenPercentStep : MIN_PROGRESS_STEP;
+        if (downloaded < total && downloaded - lastPublishedProgress < updateStep) return;
+        lastPublishedProgress = downloaded;
+        {
+          RenderLock lock(*this);
+          downloadProgress = downloaded;
+          downloadTotal = total;
+        }
         requestUpdate(true);
       },
       server.username, server.password);
@@ -298,19 +336,21 @@ void WebDAVBrowserActivity::performDownload(const std::string& destFolder) {
     if (FsHelpers::hasEpubExtension(destPath)) {
       Epub(destPath, "/.crosspoint").clearCache();
     }
-    state = BrowserState::BROWSING;
-  } else {
-    state = BrowserState::ERROR;
-    errorMessage = tr(STR_DOWNLOAD_FAILED);
+  }
+  {
+    RenderLock lock(*this);
+    if (error == WebDAVError::OK) {
+      state = BrowserState::BROWSING;
+    } else {
+      state = BrowserState::ERROR;
+      errorMessage = tr(STR_DOWNLOAD_FAILED);
+    }
   }
   requestUpdate();
 }
 
 void WebDAVBrowserActivity::checkAndConnectWifi() {
   if (WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0)) {
-    state = BrowserState::LOADING;
-    statusMessage = tr(STR_LOADING);
-    requestUpdate();
     fetchDirectory(currentUrl);
     return;
   }
@@ -318,7 +358,10 @@ void WebDAVBrowserActivity::checkAndConnectWifi() {
 }
 
 void WebDAVBrowserActivity::launchWifiSelection() {
-  state = BrowserState::WIFI_SELECTION;
+  {
+    RenderLock lock(*this);
+    state = BrowserState::WIFI_SELECTION;
+  }
   requestUpdate();
 
   startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput),
@@ -327,15 +370,15 @@ void WebDAVBrowserActivity::launchWifiSelection() {
 
 void WebDAVBrowserActivity::onWifiSelectionComplete(const bool connected) {
   if (connected) {
-    state = BrowserState::LOADING;
-    statusMessage = tr(STR_LOADING);
-    requestUpdate(true);
     fetchDirectory(currentUrl);
   } else {
+    {
+      RenderLock lock(*this);
+      state = BrowserState::ERROR;
+      errorMessage = tr(STR_WIFI_CONN_FAILED);
+    }
     WiFi.disconnect();
     WiFi.mode(WIFI_OFF);
-    state = BrowserState::ERROR;
-    errorMessage = tr(STR_WIFI_CONN_FAILED);
     requestUpdate();
   }
 }

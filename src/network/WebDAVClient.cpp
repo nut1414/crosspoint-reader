@@ -25,8 +25,7 @@ class PropfindStream final : public Stream {
   int read() override { abort(); }
   size_t write(uint8_t c) override { return write(&c, 1); }
   size_t write(const uint8_t* b, size_t n) override {
-    parser.feed(reinterpret_cast<const char*>(b), n);
-    return n;
+    return parser.feed(reinterpret_cast<const char*>(b), n) ? n : 0;
   }
   ~PropfindStream() override { parser.finish(); }
 
@@ -36,17 +35,27 @@ class PropfindStream final : public Stream {
 
 }  // namespace
 
-WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVItem>& out,
+WebDAVError WebDAVClient::propfind(const std::string& url, WebDAVItemList& out,
                                    const std::string& username, const std::string& password,
                                    bool* truncated, const std::string& baseUrl) {
-  // Recycle the previous directory listing. Keeping its capacity outside `out`
-  // lets the parser reuse the same item array while `out` remains empty on errors.
-  std::vector<WebDAVItem> reusableItems;
-  reusableItems.swap(out);
-  reusableItems.clear();
+  // Copy the URL before clearing output so callers cannot invalidate an aliased
+  // item href. The browser passes separate fields, but the public API need not.
+  const std::string requestUrl = UrlUtils::ensureProtocol(url);
+  out.clear();
   if (truncated) *truncated = false;
 
-  const std::string requestUrl = UrlUtils::ensureProtocol(url);
+  // Allocate reusable listing storage before HTTP/TLS consumes and fragments
+  // the heap. Allocation failure is recoverable instead of reaching vector's
+  // fatal uncaught allocation path.
+  WebDAVPropfindParser parser{out};
+  if (parser.outOfMemory()) {
+    LOG_ERR("WEBDAV", "OOM allocating WebDAV directory listing");
+    return WebDAVError::OUT_OF_MEMORY;
+  }
+  if (parser.error()) {
+    LOG_ERR("WEBDAV", "Failed to create PROPFIND parser");
+    return WebDAVError::PARSE_ERROR;
+  }
 
   std::unique_ptr<NetworkClient> client;
   if (requestUrl.rfind("https://", 0) == 0) {
@@ -105,7 +114,6 @@ WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVIte
     return WebDAVError::HTTP_ERROR;
   }
 
-  WebDAVPropfindParser parser{std::move(reusableItems)};
   int writeResult = 0;
   {
     PropfindStream stream{parser};
@@ -113,14 +121,26 @@ WebDAVError WebDAVClient::propfind(const std::string& url, std::vector<WebDAVIte
   }  // ~PropfindStream() calls parser.finish()
   http.end();
 
+  // A parser failure deliberately produces a short stream write. Classify it
+  // before HTTPClient's resulting stream error so malformed XML and parser OOM
+  // are not mislabeled as network failures.
+  if (parser.error()) {
+    out.clear();
+    if (parser.outOfMemory()) {
+      LOG_ERR("WEBDAV", "OOM parsing PROPFIND response");
+      return WebDAVError::OUT_OF_MEMORY;
+    }
+    LOG_ERR("WEBDAV", "Invalid PROPFIND response");
+    return WebDAVError::PARSE_ERROR;
+  }
   if (writeResult < 0) {
+    out.clear();
     LOG_ERR("WEBDAV", "PROPFIND read failed: %d (%s) url=%s", writeResult,
             HTTPClient::errorToString(writeResult).c_str(), requestUrl.c_str());
     return WebDAVError::NETWORK_ERROR;
   }
-  if (parser.error()) return WebDAVError::PARSE_ERROR;
   if (truncated) *truncated = parser.truncated;
-  out = WebDAVUrl::resolveItems(baseUrl.empty() ? requestUrl : baseUrl, requestUrl, std::move(parser.items));
+  WebDAVUrl::resolveItems(baseUrl.empty() ? requestUrl : baseUrl, requestUrl, out);
   LOG_DBG("WEBDAV", "PROPFIND %zu items%s", out.size(),
           parser.truncated ? " (truncated at MAX_ITEMS)" : "");
   return WebDAVError::OK;

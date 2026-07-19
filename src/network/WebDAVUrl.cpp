@@ -111,8 +111,8 @@ bool sameResource(const std::string& lhs, const std::string& rhs) {
          withoutTrailingSlash(stripQueryAndFragment(UrlUtils::ensureProtocol(rhs)));
 }
 
-std::vector<WebDAVItem> resolveItems(const std::string& baseUrl, const std::string& currentCollectionUrl,
-                                     std::vector<WebDAVItem>&& items) {
+void resolveItems(const std::string& baseUrl, const std::string& currentCollectionUrl,
+                  WebDAVItemList& items) {
   size_t writeIndex = 0;
   for (size_t readIndex = 0; readIndex < items.size(); ++readIndex) {
     auto& item = items[readIndex];
@@ -125,9 +125,7 @@ std::vector<WebDAVItem> resolveItems(const std::string& baseUrl, const std::stri
     }
     ++writeIndex;
   }
-  items.resize(writeIndex);
-
-  return std::move(items);
+  items.shrinkTo(writeIndex);
 }
 
 }  // namespace WebDAVUrl
