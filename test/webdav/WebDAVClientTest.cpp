@@ -4,8 +4,10 @@
 #include <string>
 #include <utility>
 
+#include "src/network/HttpChunkDecoder.h"
 #include "src/network/WebDAVItemList.h"
 #include "src/network/WebDAVPropfindParser.h"
+#include "src/network/WebDAVResponseEndDetector.h"
 #include "src/network/WebDAVUrl.h"
 
 static int testsPassed = 0;
@@ -69,6 +71,69 @@ static WebDAVItemList::StoragePtr failStorageAllocation(size_t) noexcept { retur
 static WebDAVItemList::StoragePtr allocateAtMost64Items(const size_t count) noexcept {
   if (count > 64) return {};
   return WebDAVItemList::StoragePtr{new (std::nothrow) WebDAVItem[count]};
+}
+
+static bool decodeChunked(const std::string& encoded, std::string& decoded) {
+  HttpChunkDecoder decoder;
+  for (const unsigned char byte : encoded) {
+    const auto result = decoder.consume(byte);
+    if (result == HttpChunkDecoder::Result::DATA) decoded.push_back(static_cast<char>(byte));
+    if (result == HttpChunkDecoder::Result::ERROR) return false;
+    if (result == HttpChunkDecoder::Result::COMPLETE) return true;
+  }
+  return decoder.complete();
+}
+
+void testChunkDecoderHandlesExtensionsAndBoundaries() {
+  printf("testChunkDecoderHandlesExtensionsAndBoundaries...\n");
+
+  std::string decoded;
+  ASSERT_TRUE(decodeChunked("4;name=value\r\nWiki\r\n5\r\npedia\r\n0\r\n\r\n", decoded));
+  ASSERT_EQ(decoded, "Wikipedia");
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testChunkDecoderRejectsMalformedOrIncompleteFraming() {
+  printf("testChunkDecoderRejectsMalformedOrIncompleteFraming...\n");
+
+  std::string decoded;
+  ASSERT_TRUE(!decodeChunked("1\r\nA\n0\r\n\r\n", decoded));
+  decoded.clear();
+  ASSERT_TRUE(!decodeChunked("4\r\nWiki\r\n", decoded));
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testResponseEndDetectorFindsPrefixedAndPlainRootClose() {
+  printf("testResponseEndDetectorFindsPrefixedAndPlainRootClose...\n");
+
+  WebDAVResponseEndDetector prefixed;
+  const std::string prefixedXml = "<D:multistatus><D:response/></D:multistatus>";
+  for (const unsigned char byte : prefixedXml) prefixed.consume(byte);
+  ASSERT_TRUE(prefixed.complete());
+
+  WebDAVResponseEndDetector plain;
+  const std::string plainXml = "<multistatus><response/></multistatus   >";
+  for (const unsigned char byte : plainXml) plain.consume(byte);
+  ASSERT_TRUE(plain.complete());
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testResponseEndDetectorIgnoresOpeningAndChildTags() {
+  printf("testResponseEndDetectorIgnoresOpeningAndChildTags...\n");
+
+  WebDAVResponseEndDetector detector;
+  const std::string incompleteXml = "<D:multistatus><D:response></D:response>";
+  for (const unsigned char byte : incompleteXml) detector.consume(byte);
+  ASSERT_TRUE(!detector.complete());
+
+  printf("  passed\n");
+  PASS();
 }
 
 void testResolveRootRelativeHrefUnderConfiguredBase() {
@@ -226,6 +291,51 @@ void testListingFallsBackToSmallerContiguousStorage() {
   PASS();
 }
 
+void testParserHonorsRequestedListingCapacity() {
+  printf("testParserHonorsRequestedListingCapacity...\n");
+
+  WebDAVItemList items;
+  WebDAVPropfindParser parser{items, 64};
+  ASSERT_TRUE(!parser.error());
+  ASSERT_SIZE(items.capacity(), 64u);
+
+  std::string xml = "<D:multistatus xmlns:D=\"DAV:\">";
+  for (size_t i = 0; i <= 64; ++i) {
+    xml += "<D:response><D:href>/webdav/Book" + std::to_string(i) +
+           ".epub</D:href></D:response>";
+  }
+  xml += "</D:multistatus>";
+
+  ASSERT_TRUE(parser.feed(xml.data(), xml.size()));
+  ASSERT_TRUE(parser.finish());
+  ASSERT_SIZE(items.size(), 64u);
+  ASSERT_TRUE(parser.truncated);
+
+  printf("  passed\n");
+  PASS();
+}
+
+void testListingCanReleaseRetainedStorageBeforeNetworkRequest() {
+  printf("testListingCanReleaseRetainedStorageBeforeNetworkRequest...\n");
+
+  WebDAVItemList items;
+  ASSERT_TRUE(items.ensureStorage(64));
+  ASSERT_TRUE(items.push_back({"/webdav/Book.epub", "Book.epub", false, 123}));
+  ASSERT_TRUE(items.data() != nullptr);
+  ASSERT_SIZE(items.capacity(), 64u);
+
+  items.releaseStorage();
+
+  ASSERT_TRUE(items.empty());
+  ASSERT_TRUE(items.data() == nullptr);
+  ASSERT_SIZE(items.capacity(), 0u);
+  ASSERT_TRUE(items.ensureStorage(32));
+  ASSERT_SIZE(items.capacity(), 32u);
+
+  printf("  passed\n");
+  PASS();
+}
+
 void testMalformedResponseRetryRetainsStorage() {
   printf("testMalformedResponseRetryRetainsStorage...\n");
 
@@ -239,6 +349,7 @@ void testMalformedResponseRetryRetainsStorage() {
     ASSERT_TRUE(parser.feed(malformed.data(), malformed.size()));
     ASSERT_TRUE(!parser.finish());
     ASSERT_TRUE(parser.error());
+    ASSERT_TRUE(parser.xmlError() != XML_ERROR_NONE);
   }
 
   items.clear();
@@ -278,6 +389,10 @@ void testParserTruncatesWithoutGrowingStorage() {
 }
 
 int main() {
+  testChunkDecoderHandlesExtensionsAndBoundaries();
+  testChunkDecoderRejectsMalformedOrIncompleteFraming();
+  testResponseEndDetectorFindsPrefixedAndPlainRootClose();
+  testResponseEndDetectorIgnoresOpeningAndChildTags();
   testResolveRootRelativeHrefUnderConfiguredBase();
   testResolveAbsolutePathHrefThatAlreadyIncludesBasePath();
   testResolveRelativeHrefAgainstCurrentCollection();
@@ -287,6 +402,8 @@ int main() {
   testParserReusesPreviousListingStorage();
   testParserReportsStorageAllocationFailure();
   testListingFallsBackToSmallerContiguousStorage();
+  testParserHonorsRequestedListingCapacity();
+  testListingCanReleaseRetainedStorageBeforeNetworkRequest();
   testMalformedResponseRetryRetainsStorage();
   testParserTruncatesWithoutGrowingStorage();
 

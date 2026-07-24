@@ -12,9 +12,9 @@
  * Reusable WebDAV directory storage for the constrained target heap.
  *
  * std::vector growth uses throwing operator new, and an uncaught allocation
- * failure resets the firmware. This buffer allocates with nothrow before
- * HTTP/TLS starts and falls back to a smaller listing when the heap is
- * fragmented instead of resetting the device.
+ * failure resets the firmware. This buffer allocates with nothrow and falls
+ * back to a smaller listing when the heap is fragmented instead of resetting
+ * the device.
  */
 class WebDAVItemList final {
  public:
@@ -30,7 +30,7 @@ class WebDAVItemList final {
   WebDAVItemList(WebDAVItemList&&) = delete;
   WebDAVItemList& operator=(WebDAVItemList&&) = delete;
 
-  bool ensureStorage() noexcept {
+  bool ensureStorage(const size_t maxCapacity = MAX_ITEMS) noexcept {
     if (storage) return true;
     if (!storageFactory) return false;
 
@@ -38,6 +38,7 @@ class WebDAVItemList final {
     // contiguous heap block is available.
     static constexpr size_t capacities[] = {MAX_ITEMS, 128, 64, 32, 16};
     for (const size_t candidateCapacity : capacities) {
+      if (candidateCapacity > maxCapacity) continue;
       auto candidate = storageFactory(candidateCapacity);
       if (candidate) {
         storage = std::move(candidate);
@@ -54,6 +55,12 @@ class WebDAVItemList final {
       storage[i] = WebDAVItem{};
     }
     itemCount = 0;
+  }
+
+  void releaseStorage() noexcept {
+    clear();
+    storage.reset();
+    storageCapacity = 0;
   }
 
   bool push_back(WebDAVItem&& item) noexcept {

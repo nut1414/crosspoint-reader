@@ -64,16 +64,16 @@ void TxtReaderActivity::onExit() {
 
 void TxtReaderActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && txt) {
-    startActivityForResult(
-        std::make_unique<BookOptionsMenuActivity>(renderer, mappedInput, txt->getTitle(), false),
-        [this](const ActivityResult& result) {
-          if (result.isCancelled) return;
+    startActivityForResult(std::make_unique<BookOptionsMenuActivity>(renderer, mappedInput, txt->getTitle(), false),
+                           [this](const ActivityResult& result) {
+                             if (result.isCancelled) return;
 
-          const auto action = static_cast<BookOptionsMenuActivity::Action>(std::get<MenuResult>(result.data).action);
-          if (action == BookOptionsMenuActivity::Action::BROWSE_BOOK_FOLDER) {
-            activityManager.goToFileBrowser(txt ? txt->getPath() : "");
-          }
-        });
+                             const auto action =
+                                 static_cast<BookOptionsMenuActivity::Action>(std::get<MenuResult>(result.data).action);
+                             if (action == BookOptionsMenuActivity::Action::BROWSE_BOOK_FOLDER) {
+                               activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+                             }
+                           });
     return;
   }
 

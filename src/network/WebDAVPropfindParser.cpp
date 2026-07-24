@@ -8,6 +8,8 @@
 
 namespace {
 
+constexpr int XML_INPUT_CHUNK_SIZE = 1024;
+
 const char* localName(const char* name) {
   const char* colon = strrchr(name, ':');
   return colon ? colon + 1 : name;
@@ -56,22 +58,36 @@ std::string hrefToName(const std::string& href) {
 
 }  // namespace
 
-WebDAVPropfindParser::WebDAVPropfindParser(WebDAVItemList& output) : items(output) {
+WebDAVPropfindParser::WebDAVPropfindParser(WebDAVItemList& output, const size_t maxItems)
+    : items(output) {
   items.clear();
-  if (!items.ensureStorage()) {
-    allocationFailed = true;
-    errorOccurred = true;
-    return;
-  }
 
+  // Expat's first input-buffer request requires a fixed contiguous allocation
+  // (2 KiB with the bundled configuration). Reserve and initialize that
+  // non-adaptive memory before the item list consumes the remaining heap.
   parser = XML_ParserCreate(nullptr);
   if (!parser) {
     allocationFailed = true;
     errorOccurred = true;
-  } else {
-    XML_SetUserData(parser, this);
-    XML_SetElementHandler(parser, startElement, endElement);
-    XML_SetCharacterDataHandler(parser, characterData);
+    lastXmlError = XML_ERROR_NO_MEMORY;
+    return;
+  }
+  XML_SetUserData(parser, this);
+  XML_SetElementHandler(parser, startElement, endElement);
+  XML_SetCharacterDataHandler(parser, characterData);
+  if (!XML_GetBuffer(parser, XML_INPUT_CHUNK_SIZE) ||
+      XML_ParseBuffer(parser, 0, XML_FALSE) != XML_STATUS_OK) {
+    allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
+    errorOccurred = true;
+    captureXmlError();
+    destroyXmlParser(parser);
+    return;
+  }
+
+  if (!items.ensureStorage(maxItems)) {
+    allocationFailed = true;
+    errorOccurred = true;
+    destroyXmlParser(parser);
   }
 }
 
@@ -82,23 +98,26 @@ bool WebDAVPropfindParser::feed(const char* xmlData, size_t length) {
 
   const char* currentPos = xmlData;
   size_t remaining = length;
-  constexpr size_t chunkSize = 1024;
 
   while (remaining > 0) {
-    void* const buf = XML_GetBuffer(parser, chunkSize);
+    void* const buf = XML_GetBuffer(parser, XML_INPUT_CHUNK_SIZE);
     if (!buf) {
       allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
       errorOccurred = true;
+      captureXmlError();
       destroyXmlParser(parser);
       return false;
     }
 
-    const size_t toRead = remaining < chunkSize ? remaining : chunkSize;
+    const size_t toRead = remaining < static_cast<size_t>(XML_INPUT_CHUNK_SIZE)
+                              ? remaining
+                              : static_cast<size_t>(XML_INPUT_CHUNK_SIZE);
     memcpy(buf, currentPos, toRead);
 
     if (XML_ParseBuffer(parser, static_cast<int>(toRead), XML_FALSE) == XML_STATUS_ERROR) {
       allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
       errorOccurred = true;
+      captureXmlError();
       destroyXmlParser(parser);
       return false;
     }
@@ -113,10 +132,17 @@ bool WebDAVPropfindParser::finish() {
   if (XML_Parse(parser, nullptr, 0, XML_TRUE) != XML_STATUS_OK) {
     allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
     errorOccurred = true;
+    captureXmlError();
     destroyXmlParser(parser);
     return false;
   }
   return true;
+}
+
+void WebDAVPropfindParser::captureXmlError() {
+  if (!parser) return;
+  lastXmlError = XML_GetErrorCode(parser);
+  lastXmlErrorOffset = XML_GetCurrentByteIndex(parser);
 }
 
 void XMLCALL WebDAVPropfindParser::startElement(void* userData, const XML_Char* name,

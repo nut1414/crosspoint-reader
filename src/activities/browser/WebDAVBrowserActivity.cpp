@@ -1,6 +1,7 @@
 #include "WebDAVBrowserActivity.h"
 
 #include <Epub.h>
+#include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
@@ -37,7 +38,7 @@ void WebDAVBrowserActivity::onEnter() {
 void WebDAVBrowserActivity::onExit() {
   Activity::onExit();
   WiFi.mode(WIFI_OFF);
-  items.clear();
+  items.releaseStorage();
   navigationHistory.clear();
 }
 
@@ -136,6 +137,11 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
     renderer.displayBuffer();
+    if (state == BrowserState::LOADING) {
+      if (auto* fontCache = renderer.getFontCacheManager()) {
+        fontCache->clearCache();
+      }
+    }
     return;
   }
 
@@ -221,6 +227,14 @@ void WebDAVBrowserActivity::fetchDirectory(const std::string& url) {
   }
   requestUpdateAndWait();
 
+  // ESP32-C3 modem sleep can starve a long TLS response even while WiFi still
+  // reports connected. WebDAV is synchronous and this activity turns WiFi off
+  // on exit, so keep the radio fully awake for browsing and downloads.
+  if (!WiFi.setSleep(false)) {
+    LOG_ERR("WEBDAV", "Failed to disable WiFi modem sleep");
+  }
+  LOG_DBG("WEBDAV", "WiFi RSSI=%d dBm powerSave=%d", WiFi.RSSI(), static_cast<int>(WiFi.getSleep()));
+
   LOG_DBG("WEBDAV", "Fetching directory: %s", url.c_str());
   auto error = WebDAVClient::propfind(url, items, server.username, server.password, &truncated, server.url);
 
@@ -233,7 +247,7 @@ void WebDAVBrowserActivity::fetchDirectory(const std::string& url) {
           errorMessage = tr(STR_AUTH_FAILED);
           break;
         case WebDAVError::NETWORK_ERROR:
-          errorMessage = tr(STR_WIFI_CONN_FAILED);
+          errorMessage = WiFi.status() == WL_CONNECTED ? tr(STR_FETCH_DIR_FAILED) : tr(STR_WIFI_CONN_FAILED);
           break;
         default:
           errorMessage = tr(STR_FETCH_DIR_FAILED);

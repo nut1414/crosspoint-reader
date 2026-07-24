@@ -144,20 +144,20 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                           {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideBatteryPercentage",
                           StrId::STR_CAT_DISPLAY),
-        SettingInfo::Enum(
-            StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
-            {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15, StrId::STR_PAGES_30,
-             StrId::STR_NEVER},
-            "refreshFrequency", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Enum(StrId::STR_REFRESH_FREQ, &CrossPointSettings::refreshFrequency,
+                          {StrId::STR_PAGES_1, StrId::STR_PAGES_5, StrId::STR_PAGES_10, StrId::STR_PAGES_15,
+                           StrId::STR_PAGES_30, StrId::STR_NEVER},
+                          "refreshFrequency", StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_UI_THEME, &CrossPointSettings::uiTheme,
                           {StrId::STR_THEME_CLASSIC, StrId::STR_THEME_LYRA, StrId::STR_THEME_LYRA_EXTENDED,
                            StrId::STR_THEME_ROUNDEDRAFF},
                           "uiTheme", StrId::STR_CAT_DISPLAY),
         SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                             StrId::STR_CAT_DISPLAY),
-        SettingInfo::Enum(StrId::STR_HOME_COVER_MODE, &CrossPointSettings::homeCoverMode,
-                          {StrId::STR_HOME_COVER_GENERATE, StrId::STR_HOME_COVER_EXISTING, StrId::STR_HOME_COVER_DEFAULT},
-                          "homeCoverMode", StrId::STR_CAT_DISPLAY),
+        SettingInfo::Enum(
+            StrId::STR_HOME_COVER_MODE, &CrossPointSettings::homeCoverMode,
+            {StrId::STR_HOME_COVER_GENERATE, StrId::STR_HOME_COVER_EXISTING, StrId::STR_HOME_COVER_DEFAULT},
+            "homeCoverMode", StrId::STR_CAT_DISPLAY),
 
         // --- Reader ---
         // Built-in font-family entry. Replaced per-call with a registry-aware
@@ -200,8 +200,7 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Toggle(StrId::STR_FRONT_BTN_FOLLOW_ORIENTATION, &CrossPointSettings::frontButtonFollowOrientation,
                             "frontButtonFollowOrientation", StrId::STR_CAT_CONTROLS),
         SettingInfo::Enum(StrId::STR_BLUETOOTH_PAGE_KEYS, &CrossPointSettings::bluetoothPageTurnerKeys,
-                          {StrId::STR_BT_KEYS_PAGE_UP_DOWN, StrId::STR_BT_KEYS_LEFT_RIGHT,
-                           StrId::STR_BT_KEYS_UP_DOWN},
+                          {StrId::STR_BT_KEYS_PAGE_UP_DOWN, StrId::STR_BT_KEYS_LEFT_RIGHT, StrId::STR_BT_KEYS_UP_DOWN},
                           "bluetoothPageTurnerKeys", StrId::STR_CAT_CONTROLS),
         SettingInfo::Toggle(StrId::STR_BT_SHOW_ON_HOME, &CrossPointSettings::bluetoothPageTurnerOnHome,
                             "bluetoothPageTurnerOnHome", StrId::STR_CAT_CONTROLS),

@@ -11,9 +11,9 @@
 #include "ButtonRemapActivity.h"
 #include "ClearCacheActivity.h"
 #include "CrossPointSettings.h"
+#include "FilesManagementActivity.h"
 #include "FontDownloadActivity.h"
 #include "FontSelectionActivity.h"
-#include "FilesManagementActivity.h"
 #include "KOReaderSettingsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
@@ -63,11 +63,10 @@ void SettingsActivity::rebuildSettingsLists() {
   controlsSettings.insert(controlsSettings.begin(),
                           SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS, SettingAction::RemapFrontButtons));
   controlsSettings.insert(controlsSettings.begin() + 1,
-                          SettingInfo::Action(StrId::STR_BLUETOOTH_PAGE_TURNER,
-                                              SettingAction::BluetoothPageTurner));
+                          SettingInfo::Action(StrId::STR_BLUETOOTH_PAGE_TURNER, SettingAction::BluetoothPageTurner));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_BOOK_LOG, SettingAction::BookLog));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_FILES_MANAGEMENT, SettingAction::FilesManagement));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_BOOK_LOG, SettingAction::BookLog));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WEBDAV_SERVERS, SettingAction::WebDAVServers));
@@ -261,9 +260,9 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
       case SettingAction::FilesManagement:
         startActivityForResult(std::make_unique<FilesManagementActivity>(renderer, mappedInput), resultHandler);
+        break;
       case SettingAction::BookLog:
         startActivityForResult(std::make_unique<BookLogActivity>(renderer, mappedInput), resultHandler);
-        break;
         break;
       case SettingAction::ClearCache:
         startActivityForResult(std::make_unique<ClearCacheActivity>(renderer, mappedInput), resultHandler);
