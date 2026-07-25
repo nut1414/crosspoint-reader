@@ -304,14 +304,15 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Toggle(StrId::STR_CLOCK_SYNCED, &CrossPointSettings::clockHasBeenSynced, "clockHasBeenSynced",
                             StrId::STR_CUSTOMISE_STATUS_BAR),
     };
-    // X3 can use one-pass ordered dithering as an alternative to the visible
-    // second grayscale text update. Keep X4's existing boolean setting.
+    // X3 offers one-pass ordered dithering and a grayscale-only refresh path
+    // alongside the existing grayscale AA behavior. Keep X4's boolean setting.
     if (gpio.deviceIsX3()) {
       const auto textAaSetting = std::find_if(
           v.begin(), v.end(), [](const SettingInfo& setting) { return setting.nameId == StrId::STR_TEXT_AA; });
       if (textAaSetting != v.end()) {
         *textAaSetting = SettingInfo::Enum(StrId::STR_TEXT_AA, &CrossPointSettings::textAntiAliasing,
-                                           {StrId::STR_STATE_OFF, StrId::STR_AA_GRAYSCALE, StrId::STR_AA_DITHERED},
+                                           {StrId::STR_STATE_OFF, StrId::STR_AA_GRAYSCALE, StrId::STR_AA_DITHERED,
+                                            StrId::STR_AA_GRAYSCALE_ONLY},
                                            "textAntiAliasing", StrId::STR_CAT_READER);
       }
     }

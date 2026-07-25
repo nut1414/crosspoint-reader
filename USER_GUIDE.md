@@ -249,7 +249,7 @@ The Settings screen allows you to configure the device's behavior. There are a f
   - "ON" - Vertical space will be added between paragraphs in Reading Mode
   - "OFF" - Paragraphs will not have vertical space added, but will have first-line indentation
 
-- **Text Anti-Aliasing**: On X3, choose **Off**, **Grayscale** (default), or **Dithered (one-pass)**. Grayscale provides true smooth grey edges but visibly refines the text in a second display update. Dithered approximates those edge shades with a stable black-and-white pattern, avoiding the second text update and speeding up text-only page turns. On X4 this remains an ON/OFF setting.
+- **Text Anti-Aliasing**: On X3, choose **Off**, **Grayscale** (default), **Dithered (one-pass)**, or **Grayscale (AA-only)**. Grayscale provides true smooth grey edges but visibly refines the text after the normal page update. Dithered approximates those edge shades with a stable black-and-white pattern and avoids the grayscale pass. Grayscale (AA-only) uses the dedicated grayscale refresh path for the page turn and then applies the smooth grey edges, avoiding the abrupt normal-to-grayscale transition at the cost of a slower refresh. On X4 this remains an ON/OFF setting.
 
 - **Images**: Whether to display embedded images (JPG/PNG) found in EPUB files; options are "ON" (default) or "OFF".
 

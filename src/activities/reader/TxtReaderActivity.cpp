@@ -428,7 +428,7 @@ void TxtReaderActivity::renderPage() {
     renderStatusBar();
   });
 
-  ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+  ReaderUtils::displayTextWithRefreshCycle(renderer, pagesUntilFullRefresh);
 
   if (ReaderUtils::usesGrayscaleTextAntiAliasing()) {
     ReaderUtils::renderAntiAliased(renderer, [&renderLines]() { renderLines(); });

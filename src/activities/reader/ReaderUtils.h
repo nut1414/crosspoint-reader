@@ -6,6 +6,7 @@
 #include <Logging.h>
 
 #include "MappedInputManager.h"
+#include "TextAntiAliasingPolicy.h"
 
 namespace ReaderUtils {
 
@@ -70,10 +71,36 @@ inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntil
 }
 
 inline bool usesGrayscaleTextAntiAliasing() {
-  return SETTINGS.textAntiAliasing == CrossPointSettings::TEXT_AA_GRAYSCALE;
+  return TextAntiAliasingPolicy::usesGrayscale(SETTINGS.textAntiAliasing);
 }
 
-inline bool usesDitheredTextAntiAliasing() { return SETTINGS.textAntiAliasing == CrossPointSettings::TEXT_AA_DITHERED; }
+inline bool usesDitheredTextAntiAliasing() {
+  return TextAntiAliasingPolicy::usesDitheredRaster(SETTINGS.textAntiAliasing);
+}
+
+inline bool usesGrayscaleOnlyTextAntiAliasing() {
+  return TextAntiAliasingPolicy::usesGrayscaleOnlyRefresh(SETTINGS.textAntiAliasing);
+}
+
+// The AA-only mode uses the grayscale pipeline's dedicated base waveform for
+// the page turn, so the panel never presents the normal fast-refresh result
+// before the grayscale pass. Periodic cleanup still uses the strong HALF
+// refresh, followed by the grayscale settle pass expected by the X3 panel.
+inline void displayTextWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntilFullRefresh) {
+  if (!usesGrayscaleOnlyTextAntiAliasing()) {
+    displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+    return;
+  }
+
+  if (pagesUntilFullRefresh <= 1) {
+    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    renderer.preconditionGrayscale();
+    pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+  } else {
+    renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
+    pagesUntilFullRefresh--;
+  }
+}
 
 // Apply the configured one-pass text raster policy only for the supplied
 // render. Images continue to see the normal BW render mode.
