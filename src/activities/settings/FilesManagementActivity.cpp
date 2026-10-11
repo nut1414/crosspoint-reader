@@ -9,13 +9,16 @@
 #include <algorithm>
 #include <cstring>
 
-#include "FileActionMenuActivity.h"
-#include "MappedInputManager.h"
-#include "components/UITheme.h"
-#include "fontIds.h"
 #include "../util/ConfirmationActivity.h"
 #include "../util/FolderPickerActivity.h"
 #include "../util/KeyboardEntryActivity.h"
+#include "FileActionMenuActivity.h"
+#include "MappedInputManager.h"
+#include "components/UITheme.h"
+#include "components/UiAppHelpers.h"
+#include "fontIds.h"
+
+namespace fui = freeink::ui;
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
@@ -62,29 +65,28 @@ void sortFileList(std::vector<std::string>& strs) {
   });
 }
 
-std::string getFileName(std::string filename) {
-  if (filename.back() == '/') {
-    filename.pop_back();
-    if (!UITheme::getInstance().getTheme().showsFileIcons()) {
-      return "[" + filename + "]";
-    }
-    return filename;
+void formatFileName(const std::string& filename, char* buffer, const size_t bufferSize) {
+  if (filename.empty()) {
+    buffer[0] = '\0';
+    return;
   }
-  const auto pos = filename.rfind('.');
-  return filename.substr(0, pos);
+  const bool isDirectory = filename.back() == '/';
+  const size_t dot = isDirectory ? filename.size() - 1 : filename.rfind('.');
+  const int length = static_cast<int>(dot == std::string::npos ? filename.size() : dot);
+  const char* format = isDirectory && !UITheme::getInstance().getTheme().showsFileIcons() ? "[%.*s]" : "%.*s";
+  snprintf(buffer, bufferSize, format, length, filename.c_str());
 }
 
-std::string getFileExtension(std::string filename) {
-  if (filename.back() == '/') {
-    return "";
-  }
-  const auto pos = filename.rfind('.');
-  return filename.substr(pos);
+void formatFileExtension(const std::string& filename, char* buffer, const size_t bufferSize) {
+  buffer[0] = '\0';
+  if (filename.empty() || filename.back() == '/') return;
+  if (const char* extension = strrchr(filename.c_str(), '.')) snprintf(buffer, bufferSize, "%s", extension);
 }
 }  // namespace
 
 void FilesManagementActivity::loadFiles() {
   files.clear();
+  files.reserve(16);
 
   auto root = Storage.open(basepath.c_str());
   if (!root || !root.isDirectory()) {
@@ -93,9 +95,9 @@ void FilesManagementActivity::loadFiles() {
 
   root.rewindDirectory();
 
-  char name[500];
+  char* const name = fileNameBuffer;
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
-    file.getName(name, sizeof(name));
+    file.getName(name, sizeof(fileNameBuffer));
     if ((!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0) {
       continue;
     }
@@ -109,23 +111,38 @@ void FilesManagementActivity::loadFiles() {
   sortFileList(files);
 }
 
-void FilesManagementActivity::onEnter() {
-  Activity::onEnter();
+void FilesManagementActivity::provideRow(void* ctx, const uint16_t index, fui::ListItem& item) {
+  auto* self = static_cast<FilesManagementActivity*>(ctx);
+  if (index >= self->listCount()) return;
 
-  selectorIndex = 0;
+  if (index == 0) {
+    item.label = tr(STR_NEW_FOLDER);
+    item.icon = listIconFor(Folder);
+  } else {
+    const std::string& entry = self->files[index - 1];
+    formatFileName(entry, self->rowNameBuffer, sizeof(self->rowNameBuffer));
+    item.label = self->rowNameBuffer;
+    formatFileExtension(entry, self->rowExtensionBuffer, sizeof(self->rowExtensionBuffer));
+    if (self->rowExtensionBuffer[0] != '\0') item.value = self->rowExtensionBuffer;
+    item.icon = listIconFor(UITheme::getFileIcon(entry));
+  }
+  item.actionValue = static_cast<int16_t>(index);
+}
+
+void FilesManagementActivity::onEnter() {
+  UiListActivity::onEnter();
+
   lockLongPressBack = mappedInput.isPressed(MappedInputManager::Button::Back);
   confirmPressedInActivity = false;
   backPressedInActivity = false;
 
-  auto root = Storage.open(basepath.c_str());
-  if (!root) {
-    basepath = "/";
+  {
+    RenderLock lock(*this);
+    auto root = Storage.open(basepath.c_str());
+    if (!root) basepath = "/";
     loadFiles();
-  } else {
-    loadFiles();
+    nav.reset();
   }
-
-  requestUpdate();
 }
 
 void FilesManagementActivity::onExit() {
@@ -144,10 +161,10 @@ bool FilesManagementActivity::deleteRecursively(const std::string& path) {
   }
 
   dir.rewindDirectory();
-  char name[500];
+  char* const name = fileNameBuffer;
   bool allDeleted = true;
   for (auto file = dir.openNextFile(); file; file = dir.openNextFile()) {
-    file.getName(name, sizeof(name));
+    file.getName(name, sizeof(fileNameBuffer));
     if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0) {
       continue;
     }
@@ -202,8 +219,7 @@ void FilesManagementActivity::openActionMenu(const std::string& entry, bool isDi
   startActivityForResult(std::make_unique<FileActionMenuActivity>(renderer, mappedInput, entry, isDirectory), handler);
 }
 
-void FilesManagementActivity::handleRename(const std::string& fullPath, const std::string& entry,
-                                           bool isDirectory) {
+void FilesManagementActivity::handleRename(const std::string& fullPath, const std::string& entry, bool isDirectory) {
   if (isProtectedPath(fullPath)) {
     LOG_ERR("FilesMgmt", "Cannot rename protected item: %s", fullPath.c_str());
     return;
@@ -236,7 +252,11 @@ void FilesManagementActivity::handleRename(const std::string& fullPath, const st
     if (!Storage.rename(fullPath.c_str(), newPath.c_str())) {
       LOG_ERR("FilesMgmt", "Failed to rename %s to %s", fullPath.c_str(), newPath.c_str());
     } else {
-      loadFiles();
+      {
+        RenderLock lock(*this);
+        loadFiles();
+        nav.follow(listCount());
+      }
       requestUpdate(true);
     }
   };
@@ -265,12 +285,21 @@ void FilesManagementActivity::handleMove(const std::string& fullPath, const std:
     if (!Storage.rename(fullPath.c_str(), destPath.c_str())) {
       LOG_ERR("FilesMgmt", "Failed to move %s to %s", fullPath.c_str(), destPath.c_str());
     } else {
-      loadFiles();
+      {
+        RenderLock lock(*this);
+        loadFiles();
+        nav.follow(listCount());
+      }
       requestUpdate(true);
     }
   };
 
-  startActivityForResult(std::make_unique<FolderPickerActivity>(renderer, mappedInput, basepath), handler);
+  std::string currentPath;
+  {
+    RenderLock lock(*this);
+    currentPath = basepath;
+  }
+  startActivityForResult(std::make_unique<FolderPickerActivity>(renderer, mappedInput, currentPath), handler);
 }
 
 void FilesManagementActivity::handleDelete(const std::string& fullPath, const std::string& entry, bool isDirectory) {
@@ -296,11 +325,11 @@ void FilesManagementActivity::handleDelete(const std::string& fullPath, const st
     }
 
     if (success) {
-      loadFiles();
-      if (files.empty()) {
-        selectorIndex = 0;
-      } else if (selectorIndex >= files.size() + 1) {
-        selectorIndex = files.size();
+      {
+        RenderLock lock(*this);
+        loadFiles();
+        if (nav.selected >= listCount()) nav.selected = listCount() - 1;
+        nav.follow(listCount());
       }
       requestUpdate(true);
     }
@@ -310,7 +339,87 @@ void FilesManagementActivity::handleDelete(const std::string& fullPath, const st
   startActivityForResult(std::make_unique<ConfirmationActivity>(renderer, mappedInput, heading, entry), handler);
 }
 
-void FilesManagementActivity::loop() {
+void FilesManagementActivity::createFolder() {
+  auto handler = [this](const ActivityResult& res) {
+    if (res.isCancelled || !std::holds_alternative<KeyboardResult>(res.data)) return;
+    const auto& kb = std::get<KeyboardResult>(res.data);
+    if (kb.text.empty()) return;
+
+    char sanitized[256];
+    FsHelpers::sanitizePathComponentForFat32(kb.text.c_str(), sanitized, sizeof(sanitized));
+    if (sanitized[0] == '\0') return;
+
+    std::string currentPath;
+    {
+      RenderLock lock(*this);
+      currentPath = basepath;
+    }
+    if (currentPath.back() != '/') currentPath += "/";
+    const std::string newPath = currentPath + sanitized;
+    if (!Storage.mkdir(newPath.c_str())) {
+      LOG_ERR("FilesMgmt", "Failed to create folder: %s", newPath.c_str());
+    }
+    {
+      RenderLock lock(*this);
+      loadFiles();
+      nav.follow(listCount());
+    }
+    requestUpdate(true);
+  };
+
+  startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_FOLDER_NAME)),
+                         handler);
+}
+
+void FilesManagementActivity::activateIndex(const int index) {
+  if (index < 0 || index >= listCount()) return;
+  app.clearTapFlash();
+  if (index == 0) {
+    createFolder();
+    return;
+  }
+
+  std::string entry;
+  bool isDirectory = false;
+  bool enteredDirectory = false;
+  {
+    RenderLock lock(*this);
+    const size_t fileIndex = static_cast<size_t>(index - 1);
+    if (fileIndex >= files.size()) return;
+    entry = files[fileIndex];
+    isDirectory = entry.back() == '/';
+    if (isDirectory) {
+      if (basepath.back() != '/') basepath += "/";
+      basepath += entry.substr(0, entry.length() - 1);
+      loadFiles();
+      nav.reset();
+      enteredDirectory = true;
+    }
+  }
+
+  if (enteredDirectory) {
+    requestUpdate();
+  } else {
+    openActionMenu(entry, isDirectory);
+  }
+}
+
+void FilesManagementActivity::onRowLongPress(const int index) {
+  if (index <= 0 || index >= listCount()) return;
+  app.clearTapFlash();
+  std::string entry;
+  bool isDirectory = false;
+  {
+    RenderLock lock(*this);
+    const size_t fileIndex = static_cast<size_t>(index - 1);
+    if (fileIndex >= files.size()) return;
+    entry = files[fileIndex];
+    isDirectory = entry.back() == '/';
+  }
+  openActionMenu(entry, isDirectory);
+}
+
+bool FilesManagementActivity::handleCustomInput() {
   if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
     confirmPressedInActivity = true;
   }
@@ -319,186 +428,152 @@ void FilesManagementActivity::loop() {
   }
 
   if (mappedInput.isPressed(MappedInputManager::Button::Back) && mappedInput.getHeldTime() >= GO_HOME_MS &&
-      basepath != "/" && !lockLongPressBack) {
-    basepath = "/";
-    loadFiles();
-    selectorIndex = 0;
-    lockLongPressBack = true;
-    requestUpdate();
-    return;
+      !lockLongPressBack) {
+    bool wentHome = false;
+    {
+      RenderLock lock(*this);
+      if (basepath != "/") {
+        basepath = "/";
+        loadFiles();
+        nav.reset();
+        lockLongPressBack = true;
+        wentHome = true;
+      }
+    }
+    if (wentHome) {
+      requestUpdate();
+      return true;
+    }
   }
 
   if (lockLongPressBack && mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     lockLongPressBack = false;
-    return;
+    backPressedInActivity = false;
+    return true;
   }
 
-  const int pathReserved = renderer.getLineHeight(SMALL_FONT_ID) + UITheme::getInstance().getMetrics().verticalSpacing;
-  const int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false, pathReserved);
+  return false;
+}
 
+bool FilesManagementActivity::handleButtons() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    if (!confirmPressedInActivity) return;
-    if (selectorIndex == 0) {
-      // [New Folder]
-      if (mappedInput.getHeldTime() >= LONG_PRESS_MS) {
-        return;
+    const bool pressedInActivity = confirmPressedInActivity;
+    confirmPressedInActivity = false;
+    if (!pressedInActivity) return true;
+
+    const int selected = nav.selected;
+    if (selected < 0 || selected >= listCount()) return true;
+    const unsigned long heldTime = mappedInput.getHeldTime();
+    if (selected == 0 && heldTime >= LONG_PRESS_MS) return true;
+    if (selected > 0 && heldTime >= LONG_PRESS_MS) {
+      std::string entry;
+      bool isDirectory = false;
+      {
+        RenderLock lock(*this);
+        const size_t fileIndex = static_cast<size_t>(selected - 1);
+        if (fileIndex >= files.size()) return true;
+        entry = files[fileIndex];
+        isDirectory = entry.back() == '/';
       }
-      auto handler = [this](const ActivityResult& res) {
-        if (res.isCancelled) return;
-        if (!std::holds_alternative<KeyboardResult>(res.data)) return;
-        const auto& kb = std::get<KeyboardResult>(res.data);
-        if (kb.text.empty()) return;
-
-        char sanitized[256];
-        FsHelpers::sanitizePathComponentForFat32(kb.text.c_str(), sanitized, sizeof(sanitized));
-        if (sanitized[0] == '\0') return;
-
-        std::string cleanBase = basepath;
-        if (cleanBase.back() != '/') cleanBase += "/";
-        std::string newPath = cleanBase + sanitized;
-
-        if (!Storage.mkdir(newPath.c_str())) {
-          LOG_ERR("FilesMgmt", "Failed to create folder: %s", newPath.c_str());
-        }
-        loadFiles();
-        requestUpdate(true);
-      };
-      startActivityForResult(
-          std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_FOLDER_NAME)), handler);
-      return;
-    }
-
-    const std::string& entry = files[selectorIndex - 1];
-    bool isDirectory = (entry.back() == '/');
-
-    if (mappedInput.getHeldTime() >= LONG_PRESS_MS) {
+      app.clearTapFlash();
       openActionMenu(entry, isDirectory);
-      return;
-    }
-
-    if (isDirectory) {
-      if (basepath.back() != '/') basepath += "/";
-      basepath += entry.substr(0, entry.length() - 1);
-      loadFiles();
-      selectorIndex = 0;
-      requestUpdate();
     } else {
-      openActionMenu(entry, isDirectory);
+      activateIndex(selected);
     }
-    return;
+    return true;
   }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    if (!backPressedInActivity) return;
+    const bool pressedInActivity = backPressedInActivity;
+    backPressedInActivity = false;
+    if (!pressedInActivity) return true;
 
     if (mappedInput.getHeldTime() < GO_HOME_MS) {
-      if (basepath != "/") {
-        const std::string oldPath = basepath;
-        basepath.replace(basepath.find_last_of('/'), std::string::npos, "");
-        if (basepath.empty()) basepath = "/";
-        loadFiles();
+      std::string oldPath;
+      bool atRoot = false;
+      {
+        RenderLock lock(*this);
+        atRoot = basepath == "/";
+        if (!atRoot) {
+          oldPath = basepath;
+          basepath.replace(basepath.find_last_of('/'), std::string::npos, "");
+          if (basepath.empty()) basepath = "/";
+          loadFiles();
 
-        const auto pos = oldPath.find_last_of('/');
-        const std::string dirName = oldPath.substr(pos + 1) + "/";
-        selectorIndex = findEntry(dirName) + 1;
-
-        requestUpdate();
-      } else {
+          const auto pos = oldPath.find_last_of('/');
+          const std::string dirName = oldPath.substr(pos + 1) + "/";
+          nav.selected = static_cast<int>(findEntry(dirName)) + 1;
+          nav.top = 0;
+          nav.follow(listCount());
+        }
+      }
+      if (atRoot) {
         finish();
+      } else {
+        requestUpdate();
       }
     }
+    return true;
   }
 
-  int listSize = static_cast<int>(files.size()) + 1;
-  buttonNavigator.onNextRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::nextIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousRelease([this, listSize] {
-    selectorIndex = ButtonNavigator::previousIndex(static_cast<int>(selectorIndex), listSize);
-    requestUpdate();
-  });
-
-  buttonNavigator.onNextContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::nextPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
-
-  buttonNavigator.onPreviousContinuous([this, listSize, pageItems] {
-    selectorIndex = ButtonNavigator::previousPageIndex(static_cast<int>(selectorIndex), listSize, pageItems);
-    requestUpdate();
-  });
+  return false;
 }
 
-void FilesManagementActivity::render(RenderLock&&) {
-  renderer.clearScreen();
-
-  const auto pageWidth = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
+void FilesManagementActivity::drawChrome() {
   const auto& metrics = UITheme::getInstance().getMetrics();
-
   std::string folderName = (basepath == "/") ? tr(STR_SD_CARD) : basepath.substr(basepath.rfind('/') + 1);
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, folderName.c_str());
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, renderer.getScreenWidth(), metrics.headerHeight},
+                 folderName.c_str());
+}
+
+void FilesManagementActivity::buildScreen(UiScreen& screen) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  screen.setContentMarginFromScreen(fui::Insets{static_cast<int16_t>(metrics.topPadding + metrics.headerHeight), 0,
+                                                static_cast<int16_t>(metrics.buttonHintsHeight), 0});
+  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
 
   const int pathLineHeight = renderer.getLineHeight(SMALL_FONT_ID);
-  const int pathReserved = pathLineHeight + metrics.verticalSpacing;
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight =
-      pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
-
-  int listSize = static_cast<int>(files.size()) + 1;
-
-  if (listSize == 1 && files.empty()) {
-    renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, contentTop + 20, tr(STR_NO_FILES_FOUND));
-  } else {
-    GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, listSize, static_cast<int>(selectorIndex),
-                 [this](int index) {
-                   if (index == 0) return std::string(tr(STR_NEW_FOLDER));
-                   return getFileName(files[index - 1]);
-                 },
-                 nullptr,
-                 [this](int index) {
-                   if (index == 0) return Folder;
-                   return UITheme::getFileIcon(files[index - 1]);
-                 },
-                 [this](int index) -> std::string {
-                   if (index == 0) return "";
-                   return getFileExtension(files[index - 1]);
-                 },
-                 false);
-  }
-
-  // Full path display
-  {
-    const int pathY = pageHeight - metrics.buttonHintsHeight - metrics.verticalSpacing - pathLineHeight;
-    const int separatorY = pathY - metrics.verticalSpacing / 2;
-    renderer.drawLine(0, separatorY, pageWidth - 1, separatorY, 3, true);
-    const int pathMaxWidth = pageWidth - metrics.contentSidePadding * 2;
-    const char* pathStr = basepath.c_str();
-    const char* pathDisplay = pathStr;
-    char leftTruncBuf[256];
-    if (renderer.getTextWidth(SMALL_FONT_ID, pathStr) > pathMaxWidth) {
-      const char ellipsis[] = "\xe2\x80\xa6";
-      const int ellipsisWidth = renderer.getTextWidth(SMALL_FONT_ID, ellipsis);
-      const int available = pathMaxWidth - ellipsisWidth;
-      const char* p = pathStr;
-      while (*p) {
-        if (renderer.getTextWidth(SMALL_FONT_ID, p) <= available) break;
-        ++p;
-        while (*p && (static_cast<unsigned char>(*p) & 0xC0) == 0x80) ++p;
-      }
-      snprintf(leftTruncBuf, sizeof(leftTruncBuf), "%s%s", ellipsis, p);
-      pathDisplay = leftTruncBuf;
+  const fui::Rect pathBand = screen.takeBottom(static_cast<int16_t>(pathLineHeight + metrics.verticalSpacing));
+  screen.target().fill(fui::Rect{pathBand.x, pathBand.y, pathBand.width, 3}, fui::Paint::solid(fui::Color::Black));
+  const int pathY =
+      pathBand.y + metrics.verticalSpacing / 2 + (pathBand.height - metrics.verticalSpacing / 2 - pathLineHeight) / 2;
+  const int pathMaxWidth = pathBand.width - metrics.contentSidePadding * 2;
+  const char* pathStr = basepath.c_str();
+  const char* pathDisplay = pathStr;
+  char leftTruncBuf[256];
+  if (renderer.getTextWidth(SMALL_FONT_ID, pathStr) > pathMaxWidth) {
+    const char ellipsis[] = "\xe2\x80\xa6";
+    const int ellipsisWidth = renderer.getTextWidth(SMALL_FONT_ID, ellipsis);
+    const int available = pathMaxWidth - ellipsisWidth;
+    const char* p = pathStr;
+    while (*p) {
+      if (renderer.getTextWidth(SMALL_FONT_ID, p) <= available) break;
+      ++p;
+      while (*p && (static_cast<unsigned char>(*p) & 0xC0) == 0x80) ++p;
     }
-    renderer.drawText(SMALL_FONT_ID, metrics.contentSidePadding, pathY, pathDisplay);
+    snprintf(leftTruncBuf, sizeof(leftTruncBuf), "%s%s", ellipsis, p);
+    pathDisplay = leftTruncBuf;
+  }
+  renderer.drawText(SMALL_FONT_ID, pathBand.x + metrics.contentSidePadding, pathY, pathDisplay);
+
+  if (files.empty()) {
+    const auto text = screen.theme().smallText;
+    screen.target().text(screen.takeTop(screen.target().lineHeight(text.font), metrics.verticalSpacing),
+                         tr(STR_NO_FILES_FOUND), text);
   }
 
-  // Help text
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-
-  renderer.displayBuffer();
+  fui::ListProps props;
+  props.rowProvider = &FilesManagementActivity::provideRow;
+  props.rowProviderCtx = this;
+  props.count = static_cast<uint16_t>(listCount());
+  props.action = ACTION_ROW;
+  props.inputMask = fui::InputTouch | fui::InputLongPress;
+  props.valueInset = 8;
+  fui::TextStyle label = screen.theme().smallText;
+  label.maxLines = 2;
+  props.labelText = label;
+  syncListViewport(screen, props);
+  screen.list(props);
 }
 
 size_t FilesManagementActivity::findEntry(const std::string& name) const {

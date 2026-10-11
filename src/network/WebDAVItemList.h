@@ -22,8 +22,7 @@ class WebDAVItemList final {
   using StoragePtr = std::unique_ptr<WebDAVItem[]>;
   using StorageFactory = StoragePtr (*)(size_t count) noexcept;
 
-  explicit WebDAVItemList(StorageFactory storageFactory = &allocateStorage) noexcept
-      : storageFactory(storageFactory) {}
+  explicit WebDAVItemList(StorageFactory storageFactory = &allocateStorage) noexcept : storageFactory(storageFactory) {}
 
   WebDAVItemList(const WebDAVItemList&) = delete;
   WebDAVItemList& operator=(const WebDAVItemList&) = delete;

@@ -26,15 +26,15 @@ static int testsFailed = 0;
     }                                                                             \
   } while (0)
 
-#define ASSERT_SIZE(a, b)                                                           \
-  do {                                                                              \
-    auto _a = (a);                                                                  \
-    auto _b = (b);                                                                  \
-    if (_a != _b) {                                                                 \
-      fprintf(stderr, "  FAIL: %s:%d: %s != %s\n", __FILE__, __LINE__, #a, #b);     \
-      testsFailed++;                                                               \
-      return;                                                                      \
-    }                                                                               \
+#define ASSERT_SIZE(a, b)                                                       \
+  do {                                                                          \
+    auto _a = (a);                                                              \
+    auto _b = (b);                                                              \
+    if (_a != _b) {                                                             \
+      fprintf(stderr, "  FAIL: %s:%d: %s != %s\n", __FILE__, __LINE__, #a, #b); \
+      testsFailed++;                                                            \
+      return;                                                                   \
+    }                                                                           \
   } while (0)
 
 #define ASSERT_TRUE(cond)                                                \
@@ -171,8 +171,7 @@ void testResolveRelativeHrefAgainstCurrentCollection() {
 void testResolveAbsoluteUrlAsIs() {
   printf("testResolveAbsoluteUrlAsIs...\n");
 
-  ASSERT_EQ(WebDAVUrl::resolveHref("https://host/webdav/", "https://host/webdav/",
-                                   "https://other.example/dav/Folder/"),
+  ASSERT_EQ(WebDAVUrl::resolveHref("https://host/webdav/", "https://host/webdav/", "https://other.example/dav/Folder/"),
             "https://other.example/dav/Folder/");
 
   printf("  passed\n");
@@ -301,8 +300,7 @@ void testParserHonorsRequestedListingCapacity() {
 
   std::string xml = "<D:multistatus xmlns:D=\"DAV:\">";
   for (size_t i = 0; i <= 64; ++i) {
-    xml += "<D:response><D:href>/webdav/Book" + std::to_string(i) +
-           ".epub</D:href></D:response>";
+    xml += "<D:response><D:href>/webdav/Book" + std::to_string(i) + ".epub</D:href></D:response>";
   }
   xml += "</D:multistatus>";
 
@@ -372,8 +370,7 @@ void testParserTruncatesWithoutGrowingStorage() {
 
   std::string xml = "<D:multistatus xmlns:D=\"DAV:\">";
   for (size_t i = 0; i <= WebDAVItemList::MAX_ITEMS; ++i) {
-    xml += "<D:response><D:href>/webdav/Book" + std::to_string(i) +
-           ".epub</D:href></D:response>";
+    xml += "<D:response><D:href>/webdav/Book" + std::to_string(i) + ".epub</D:href></D:response>";
   }
   xml += "</D:multistatus>";
 

@@ -46,7 +46,14 @@ class Activity {
   // Background work historically used preventAutoSleep() for both policies. Keep that
   // behavior by default, while allowing idle activities to stay awake at low CPU speed.
   virtual bool preventPowerSaving() { return preventAutoSleep(); }
+  // Exclusive storage activities suspend global controls and normal activity
+  // transitions so no filesystem code races a raw SD-card owner.
+  virtual bool requiresExclusiveStorageLoop() const { return false; }
   virtual bool isReaderActivity() const { return false; }
+  // Returns true when the activity schedules its own forced refresh.
+  virtual bool handleForcedRefresh() { return false; }
+  virtual bool isHomeActivity() const { return false; }
+  virtual bool handleHomeGesture() { return false; }
   virtual ScreenshotInfo getScreenshotInfo() const { return {}; }
 
   // Start a new activity without destroying the current one
@@ -57,10 +64,10 @@ class Activity {
   void setResult(ActivityResult&& result);
 
   // Finish this activity and return to the previous one on the stack (if any)
-  void finish();
+  static void finish();
 
   // Convenience method to facilitate API transition to ActivityManager
   // TODO: remove this in near future
-  void onGoHome(HomeMenuItem item = HomeMenuItem::NONE);
-  void onSelectBook(const std::string& path);
+  static void onGoHome(HomeMenuItem item = HomeMenuItem::NONE);
+  static void onSelectBook(const std::string& path);
 };

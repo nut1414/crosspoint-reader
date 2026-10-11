@@ -26,8 +26,7 @@ BookLogStore BookLogStore::instance;
 void BookLogStore::recordBook(const std::string& path, const std::string& title, const std::string& author) {
   if (path.empty()) return;
 
-  auto it = std::find_if(books.begin(), books.end(),
-                         [&](const BookLogEntry& book) { return book.path == path; });
+  auto it = std::find_if(books.begin(), books.end(), [&](const BookLogEntry& book) { return book.path == path; });
   if (it != books.end()) {
     books.erase(it);
   }
@@ -39,8 +38,7 @@ void BookLogStore::recordBook(const std::string& path, const std::string& title,
 }
 
 bool BookLogStore::removeByPath(const std::string& path) {
-  auto it = std::find_if(books.begin(), books.end(),
-                         [&](const BookLogEntry& book) { return book.path == path; });
+  auto it = std::find_if(books.begin(), books.end(), [&](const BookLogEntry& book) { return book.path == path; });
   if (it == books.end()) return false;
 
   books.erase(it);
@@ -53,8 +51,7 @@ bool BookLogStore::removeByPath(const std::string& path) {
 void BookLogStore::updatePath(const std::string& oldPath, const std::string& newPath) {
   if (oldPath.empty() || newPath.empty() || oldPath == newPath) return;
 
-  auto moved = std::find_if(books.begin(), books.end(),
-                            [&](const BookLogEntry& book) { return book.path == oldPath; });
+  auto moved = std::find_if(books.begin(), books.end(), [&](const BookLogEntry& book) { return book.path == oldPath; });
   if (moved == books.end()) return;
 
   moved->path = newPath;
@@ -66,8 +63,7 @@ void BookLogStore::updatePath(const std::string& oldPath, const std::string& new
       it = books.erase(it);
       // erase can invalidate moved when the erased element precedes it; find it
       // again before continuing.
-      moved = std::find_if(books.begin(), books.end(),
-                           [&](const BookLogEntry& book) { return book.path == newPath; });
+      moved = std::find_if(books.begin(), books.end(), [&](const BookLogEntry& book) { return book.path == newPath; });
     } else {
       ++it;
     }

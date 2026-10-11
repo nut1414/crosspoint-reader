@@ -75,8 +75,7 @@ std::string normalizeCollectionUrl(const std::string& url) {
   return ensureTrailingSlash(UrlUtils::ensureProtocol(url));
 }
 
-std::string resolveHref(const std::string& baseUrl, const std::string& currentCollectionUrl,
-                        const std::string& href) {
+std::string resolveHref(const std::string& baseUrl, const std::string& currentCollectionUrl, const std::string& href) {
   if (href.empty()) {
     return normalizeCollectionUrl(currentCollectionUrl.empty() ? baseUrl : currentCollectionUrl);
   }
@@ -111,8 +110,7 @@ bool sameResource(const std::string& lhs, const std::string& rhs) {
          withoutTrailingSlash(stripQueryAndFragment(UrlUtils::ensureProtocol(rhs)));
 }
 
-void resolveItems(const std::string& baseUrl, const std::string& currentCollectionUrl,
-                  WebDAVItemList& items) {
+void resolveItems(const std::string& baseUrl, const std::string& currentCollectionUrl, WebDAVItemList& items) {
   size_t writeIndex = 0;
   for (size_t readIndex = 0; readIndex < items.size(); ++readIndex) {
     auto& item = items[readIndex];

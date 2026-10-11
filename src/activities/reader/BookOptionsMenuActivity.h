@@ -2,23 +2,18 @@
 
 #include <I18n.h>
 
+#include <array>
 #include <string>
 #include <vector>
 
-#include "activities/Activity.h"
-#include "util/ButtonNavigator.h"
+#include "activities/UiListActivity.h"
 
-class BookOptionsMenuActivity final : public Activity {
+class BookOptionsMenuActivity final : public UiListActivity {
  public:
   enum class Action { SELECT_CHAPTER, BROWSE_BOOK_FOLDER };
 
   explicit BookOptionsMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                    bool hasChapters);
-
-  void onEnter() override;
-  void onExit() override;
-  void loop() override;
-  void render(RenderLock&&) override;
 
  private:
   struct MenuItem {
@@ -27,9 +22,14 @@ class BookOptionsMenuActivity final : public Activity {
   };
 
   static std::vector<MenuItem> buildMenuItems(bool hasChapters);
+  int listCount() const override { return static_cast<int>(menuItems.size()); }
+  void buildScreen(UiScreen& screen) override;
+  void activateIndex(int index) override;
+  const char* headerTitle() const override { return title.c_str(); }
+  void drawChrome() override;
+  void onBackButton() override;
 
   const std::vector<MenuItem> menuItems;
   std::string title;
-  int selectedIndex = 0;
-  ButtonNavigator buttonNavigator;
+  std::array<freeink::ui::ListItem, 2> menuRowItems{};
 };

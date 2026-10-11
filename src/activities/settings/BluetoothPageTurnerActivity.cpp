@@ -29,30 +29,30 @@ constexpr unsigned long BATTERY_LEVEL_UPDATE_MS = 60000;
 
 const uint8_t HID_REPORT_MAP[] = {
     // Keyboard report: modifiers, reserved byte, six key slots.
-    0x05, 0x01,                    // Usage Page (Generic Desktop)
-    0x09, 0x06,                    // Usage (Keyboard)
-    0xA1, 0x01,                    // Collection (Application)
+    0x05, 0x01,                                        // Usage Page (Generic Desktop)
+    0x09, 0x06,                                        // Usage (Keyboard)
+    0xA1, 0x01,                                        // Collection (Application)
     0x85, BluetoothPageTurnerHid::KEYBOARD_REPORT_ID,  //   Report ID
-    0x05, 0x07,                    //   Usage Page (Keyboard)
-    0x19, 0xE0,                    //   Usage Minimum (Left Control)
-    0x29, 0xE7,                    //   Usage Maximum (Right GUI)
-    0x15, 0x00,                    //   Logical Minimum (0)
-    0x25, 0x01,                    //   Logical Maximum (1)
-    0x75, 0x01,                    //   Report Size (1)
-    0x95, 0x08,                    //   Report Count (8)
-    0x81, 0x02,                    //   Input (Data, Variable, Absolute)
-    0x95, 0x01,                    //   Report Count (1)
-    0x75, 0x08,                    //   Report Size (8)
-    0x81, 0x01,                    //   Input (Constant)
-    0x95, 0x06,                    //   Report Count (6)
-    0x75, 0x08,                    //   Report Size (8)
-    0x15, 0x00,                    //   Logical Minimum (0)
-    0x25, 0x65,                    //   Logical Maximum (101)
-    0x05, 0x07,                    //   Usage Page (Keyboard)
-    0x19, 0x00,                    //   Usage Minimum (Reserved)
-    0x29, 0x65,                    //   Usage Maximum (Keyboard Application)
-    0x81, 0x00,                    //   Input (Data, Array)
-    0xC0,                          // End Collection
+    0x05, 0x07,                                        //   Usage Page (Keyboard)
+    0x19, 0xE0,                                        //   Usage Minimum (Left Control)
+    0x29, 0xE7,                                        //   Usage Maximum (Right GUI)
+    0x15, 0x00,                                        //   Logical Minimum (0)
+    0x25, 0x01,                                        //   Logical Maximum (1)
+    0x75, 0x01,                                        //   Report Size (1)
+    0x95, 0x08,                                        //   Report Count (8)
+    0x81, 0x02,                                        //   Input (Data, Variable, Absolute)
+    0x95, 0x01,                                        //   Report Count (1)
+    0x75, 0x08,                                        //   Report Size (8)
+    0x81, 0x01,                                        //   Input (Constant)
+    0x95, 0x06,                                        //   Report Count (6)
+    0x75, 0x08,                                        //   Report Size (8)
+    0x15, 0x00,                                        //   Logical Minimum (0)
+    0x25, 0x65,                                        //   Logical Maximum (101)
+    0x05, 0x07,                                        //   Usage Page (Keyboard)
+    0x19, 0x00,                                        //   Usage Minimum (Reserved)
+    0x29, 0x65,                                        //   Usage Maximum (Keyboard Application)
+    0x81, 0x00,                                        //   Input (Data, Array)
+    0xC0,                                              // End Collection
 };
 
 struct KeyboardReport {
@@ -276,8 +276,7 @@ void BluetoothPageTurnerActivity::sendPageTurn(bool next) {
     return;
   }
 
-  const auto profile =
-      static_cast<CrossPointSettings::BLUETOOTH_PAGE_TURNER_KEYS>(SETTINGS.bluetoothPageTurnerKeys);
+  const auto profile = static_cast<CrossPointSettings::BLUETOOTH_PAGE_TURNER_KEYS>(SETTINGS.bluetoothPageTurnerKeys);
   sendKeyboardKey(BluetoothPageTurnerHid::resolvePageTurn(profile, next));
 }
 
@@ -398,8 +397,7 @@ void BluetoothPageTurnerActivity::render(RenderLock&&) {
   const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing * 3;
   const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
-                 tr(STR_BLUETOOTH_PAGE_TURNER));
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_BLUETOOTH_PAGE_TURNER));
 
   renderer.drawCenteredText(UI_12_FONT_ID, contentTop, getStatusLabel(), true, EpdFontFamily::BOLD);
 

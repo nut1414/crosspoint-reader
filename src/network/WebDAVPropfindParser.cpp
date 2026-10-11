@@ -58,8 +58,7 @@ std::string hrefToName(const std::string& href) {
 
 }  // namespace
 
-WebDAVPropfindParser::WebDAVPropfindParser(WebDAVItemList& output, const size_t maxItems)
-    : items(output) {
+WebDAVPropfindParser::WebDAVPropfindParser(WebDAVItemList& output, const size_t maxItems) : items(output) {
   items.clear();
 
   // Expat's first input-buffer request requires a fixed contiguous allocation
@@ -75,8 +74,7 @@ WebDAVPropfindParser::WebDAVPropfindParser(WebDAVItemList& output, const size_t 
   XML_SetUserData(parser, this);
   XML_SetElementHandler(parser, startElement, endElement);
   XML_SetCharacterDataHandler(parser, characterData);
-  if (!XML_GetBuffer(parser, XML_INPUT_CHUNK_SIZE) ||
-      XML_ParseBuffer(parser, 0, XML_FALSE) != XML_STATUS_OK) {
+  if (!XML_GetBuffer(parser, XML_INPUT_CHUNK_SIZE) || XML_ParseBuffer(parser, 0, XML_FALSE) != XML_STATUS_OK) {
     allocationFailed = XML_GetErrorCode(parser) == XML_ERROR_NO_MEMORY;
     errorOccurred = true;
     captureXmlError();
@@ -109,9 +107,8 @@ bool WebDAVPropfindParser::feed(const char* xmlData, size_t length) {
       return false;
     }
 
-    const size_t toRead = remaining < static_cast<size_t>(XML_INPUT_CHUNK_SIZE)
-                              ? remaining
-                              : static_cast<size_t>(XML_INPUT_CHUNK_SIZE);
+    const size_t toRead =
+        remaining < static_cast<size_t>(XML_INPUT_CHUNK_SIZE) ? remaining : static_cast<size_t>(XML_INPUT_CHUNK_SIZE);
     memcpy(buf, currentPos, toRead);
 
     if (XML_ParseBuffer(parser, static_cast<int>(toRead), XML_FALSE) == XML_STATUS_ERROR) {
@@ -145,8 +142,7 @@ void WebDAVPropfindParser::captureXmlError() {
   lastXmlErrorOffset = XML_GetCurrentByteIndex(parser);
 }
 
-void XMLCALL WebDAVPropfindParser::startElement(void* userData, const XML_Char* name,
-                                                const XML_Char** /*atts*/) {
+void XMLCALL WebDAVPropfindParser::startElement(void* userData, const XML_Char* name, const XML_Char** /*atts*/) {
   auto* self = static_cast<WebDAVPropfindParser*>(userData);
   const char* local = localName(name);
   if (strcmp(local, "response") == 0) {

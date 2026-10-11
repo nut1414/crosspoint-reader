@@ -2,125 +2,123 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
+#include <Memory.h>
+
+#include <utility>
 
 #include "MappedInputManager.h"
 #include "WebDAVServerStore.h"
 #include "WebDAVSettingsActivity.h"
 #include "activities/ActivityManager.h"
+#include "activities/RenderLock.h"
 #include "activities/browser/WebDAVBrowserActivity.h"
 #include "components/UITheme.h"
-#include "fontIds.h"
+
+namespace fui = freeink::ui;
+
+WebDAVServerListActivity::WebDAVServerListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                                   const bool pickerMode)
+    : UiListActivity("WebDAVServerList", renderer, mappedInput), pickerMode(pickerMode) {}
 
 int WebDAVServerListActivity::getItemCount() const {
-  int count = static_cast<int>(WEBDAV_STORE.getCount());
-  if (!pickerMode) {
-    count++;
-  }
-  return count;
+  const int serverCount = static_cast<int>(WEBDAV_STORE.getCount());
+  return serverCount + (pickerMode ? 0 : 1);
 }
 
 void WebDAVServerListActivity::onEnter() {
-  Activity::onEnter();
-
+  RenderLock lock(*this);
+  UiListActivity::onEnter();
   WEBDAV_STORE.loadFromFile();
-  selectedIndex = 0;
-  requestUpdate();
+  nav.selected = 0;
 }
 
-void WebDAVServerListActivity::onExit() { Activity::onExit(); }
-
-void WebDAVServerListActivity::loop() {
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    if (pickerMode) {
-      activityManager.goHome();
-    } else {
-      finish();
-    }
-    return;
+void WebDAVServerListActivity::onBackButton() {
+  if (pickerMode) {
+    activityManager.goHome();
+  } else {
+    finish();
   }
+}
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Confirm)) {
-    handleSelection();
-    return;
-  }
+const char* WebDAVServerListActivity::headerTitle() const { return tr(STR_WEBDAV_SERVERS); }
 
-  const int itemCount = getItemCount();
-  if (itemCount > 0) {
-    buttonNavigator.onNext([this, itemCount] {
-      selectedIndex = ButtonNavigator::nextIndex(selectedIndex, itemCount);
-      requestUpdate();
-    });
-
-    buttonNavigator.onPrevious([this, itemCount] {
-      selectedIndex = ButtonNavigator::previousIndex(selectedIndex, itemCount);
-      requestUpdate();
-    });
-  }
+void WebDAVServerListActivity::activateIndex(const int index) {
+  nav.selected = index;
+  app.clearTapFlash();
+  handleSelection();
 }
 
 void WebDAVServerListActivity::handleSelection() {
-  const auto serverCount = static_cast<int>(WEBDAV_STORE.getCount());
+  const int serverCount = static_cast<int>(WEBDAV_STORE.getCount());
+  if (nav.selected < 0 || nav.selected >= getItemCount()) return;
 
   if (pickerMode) {
-    if (selectedIndex < serverCount) {
-      const auto* server = WEBDAV_STORE.getServer(static_cast<size_t>(selectedIndex));
-      if (server) {
-        activityManager.replaceActivity(std::make_unique<WebDAVBrowserActivity>(renderer, mappedInput, *server));
+    const auto* server = WEBDAV_STORE.getServer(static_cast<size_t>(nav.selected));
+    if (server) {
+      auto browser = makeUniqueNoThrow<WebDAVBrowserActivity>(renderer, mappedInput, *server);
+      if (!browser) {
+        LOG_ERR("WDS", "OOM: WebDAV browser activity");
+        return;
       }
+      activityManager.replaceActivity(std::move(browser));
     }
     return;
   }
 
-  auto resultHandler = [this](const ActivityResult&) {
-    WEBDAV_STORE.loadFromFile();
-    selectedIndex = 0;
-  };
-
-  if (selectedIndex < serverCount) {
-    startActivityForResult(std::make_unique<WebDAVSettingsActivity>(renderer, mappedInput, selectedIndex), resultHandler);
-  } else {
-    startActivityForResult(std::make_unique<WebDAVSettingsActivity>(renderer, mappedInput, -1), resultHandler);
+  const int selected = nav.selected.load();
+  const int serverIndex = selected < serverCount ? selected : -1;
+  auto editor = makeUniqueNoThrow<WebDAVSettingsActivity>(renderer, mappedInput, serverIndex);
+  if (!editor) {
+    LOG_ERR("WDS", "OOM: WebDAV settings activity");
+    return;
   }
+  startActivityForResult(std::move(editor), [this](const ActivityResult&) {
+    closeRouting();
+    RenderLock lock(*this);
+    WEBDAV_STORE.loadFromFile();
+    nav.selected = 0;
+    requestUpdate();
+  });
 }
 
-void WebDAVServerListActivity::render(RenderLock&&) {
-  renderer.clearScreen();
-
+void WebDAVServerListActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  const auto pageWidth = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
+  const Rect safe = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
+  screen.setContentMarginFromScreen(
+      fui::Insets{static_cast<int16_t>(safe.y + metrics.topPadding + metrics.headerHeight),
+                  static_cast<int16_t>(renderer.getScreenWidth() - (safe.x + safe.width)),
+                  static_cast<int16_t>(renderer.getScreenHeight() - (safe.y + safe.height) + metrics.buttonHintsHeight),
+                  static_cast<int16_t>(safe.x)});
+  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_WEBDAV_SERVERS));
-
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
+  const auto& servers = WEBDAV_STORE.getServers();
+  const int serverCount = static_cast<int>(servers.size());
   const int itemCount = getItemCount();
-
   if (itemCount == 0) {
-    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2, tr(STR_NO_WEBDAV_SERVERS));
-  } else {
-    const auto& servers = WEBDAV_STORE.getServers();
-    const auto serverCount = static_cast<int>(servers.size());
-
-    GUI.drawList(
-        renderer, Rect{0, contentTop, pageWidth, contentHeight}, itemCount, selectedIndex,
-        [&servers, serverCount](int index) {
-          if (index < serverCount) {
-            const auto& server = servers[index];
-            return server.name.empty() ? server.url : server.name;
-          }
-          return std::string(I18n::getInstance().get(StrId::STR_ADD_SERVER));
-        },
-        [&servers, serverCount](int index) {
-          if (index < serverCount && !servers[index].name.empty()) {
-            return servers[index].url;
-          }
-          return std::string("");
-        });
+    screen.centeredText(tr(STR_NO_WEBDAV_SERVERS), screen.theme().bodyText);
+    return;
   }
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  for (int i = 0; i < serverCount; ++i) {
+    auto& item = rowItems_[i];
+    item = {};
+    item.label = servers[i].name.empty() ? servers[i].url.c_str() : servers[i].name.c_str();
+    if (!servers[i].name.empty()) item.subtitle = servers[i].url.c_str();
+    item.actionValue = static_cast<int16_t>(i);
+  }
+  if (!pickerMode) {
+    auto& item = rowItems_[serverCount];
+    item = {};
+    item.label = tr(STR_ADD_SERVER);
+    item.actionValue = static_cast<int16_t>(serverCount);
+  }
 
-  renderer.displayBuffer();
+  fui::ListProps props;
+  props.items = rowItems_.data();
+  props.count = static_cast<uint16_t>(itemCount);
+  props.action = ACTION_ROW;
+  props.inputMask = fui::InputTouch;  // Physical buttons stay in UiListActivity.
+  syncListViewport(screen, props);
+  screen.list(props);
 }

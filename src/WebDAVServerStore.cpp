@@ -1,34 +1,46 @@
 #include "WebDAVServerStore.h"
 
-#include <HalStorage.h>
-#include <JsonSettingsIO.h>
 #include <Logging.h>
+#include <ObfuscationUtils.h>
 
-WebDAVServerStore WebDAVServerStore::instance;
+#include <algorithm>
+#include <utility>
 
-namespace {
-constexpr char WEBDAV_FILE_JSON[] = "/.crosspoint/webdav.json";
-}  // namespace
-
-bool WebDAVServerStore::saveToFile() const {
-  Storage.mkdir("/.crosspoint");
-  return JsonSettingsIO::saveWebDAV(*this, WEBDAV_FILE_JSON);
+void WebDAVServerStore::toJson(JsonDocument& doc) const {
+  JsonArray arr = doc["servers"].to<JsonArray>();
+  for (const auto& server : servers) {
+    JsonObject obj = arr.add<JsonObject>();
+    obj["name"] = server.name;
+    obj["url"] = server.url;
+    obj["username"] = server.username;
+    obj["password_obf"] = obfuscation::obfuscateToBase64(server.password);
+  }
 }
 
-bool WebDAVServerStore::loadFromFile() {
-  if (Storage.exists(WEBDAV_FILE_JSON)) {
-    String json = Storage.readFile(WEBDAV_FILE_JSON);
-    if (!json.isEmpty()) {
-      bool resave = false;
-      bool result = JsonSettingsIO::loadWebDAV(*this, json.c_str(), &resave);
-      if (result && resave) {
-        LOG_DBG("WDS", "Resaving JSON with obfuscated passwords");
-        saveToFile();
-      }
-      return result;
-    }
+bool WebDAVServerStore::fromJson(JsonVariantConst doc) {
+  servers.clear();
+  JsonArrayConst arr = doc["servers"].as<JsonArrayConst>();
+  servers.reserve(std::min(arr.size(), MAX_SERVERS));
+  bool needsResave = false;
+
+  for (JsonObjectConst obj : arr) {
+    if (servers.size() >= MAX_SERVERS) break;
+    WebDAVServer server;
+    server.name = obj["name"] | "";
+    server.url = obj["url"] | "";
+    server.username = obj["username"] | "";
+    server.password = extractPassword(obj, needsResave);
+    servers.push_back(std::move(server));
   }
-  return false;
+
+  LOG_DBG("WDS", "Loaded %zu WebDAV servers from file", servers.size());
+
+  if (needsResave) {
+    LOG_DBG("WDS", "Resaving JSON with obfuscated passwords");
+    requestResave();
+  }
+
+  return true;
 }
 
 bool WebDAVServerStore::addServer(const WebDAVServer& server) {

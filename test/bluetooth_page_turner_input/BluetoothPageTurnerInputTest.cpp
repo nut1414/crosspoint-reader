@@ -4,8 +4,6 @@
 #include "GfxRenderer.h"
 #include "activities/settings/BluetoothPageTurnerInput.h"
 
-CrossPointSettings CrossPointSettings::instance;
-
 class BluetoothPageTurnerInputTest : public testing::Test {
  protected:
   HalGPIO gpio;

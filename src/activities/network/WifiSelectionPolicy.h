@@ -25,6 +25,7 @@ struct WifiNetworkInfo {
   int32_t rssi;
   bool isEncrypted;
   bool hasSavedPassword;
+  bool isHiddenPlaceholder = false;
 };
 
 // Returns the index of the sole unique visible network with usable saved

@@ -1,31 +1,23 @@
 #pragma once
 
 #include "WebDAVServerStore.h"
-#include "activities/Activity.h"
-#include "util/ButtonNavigator.h"
+#include "activities/UiListActivity.h"
 
-/**
- * Edit screen for a single WebDAV server.
- * Shows Name, URL, Username, Password fields and a Delete option.
- * Used for both adding new servers and editing existing ones.
- */
-class WebDAVSettingsActivity final : public Activity {
+/** Edit one WebDAV server, saving each field as it is changed. */
+class WebDAVSettingsActivity final : public UiListActivity {
  public:
-  /**
-   * @param serverIndex Index into WebDAVServerStore, or -1 for a new server
-   */
-  explicit WebDAVSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, int serverIndex = -1)
-      : Activity("WebDAVSettings", renderer, mappedInput), serverIndex(serverIndex) {}
+  /** @param serverIndex Index into WebDAVServerStore, or -1 for a new server. */
+  explicit WebDAVSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, int serverIndex = -1);
 
   void onEnter() override;
-  void onExit() override;
-  void loop() override;
-  void render(RenderLock&&) override;
 
  private:
-  ButtonNavigator buttonNavigator;
+  int listCount() const override { return getMenuItemCount(); }
+  void buildScreen(UiScreen& screen) override;
+  void activateIndex(int index) override;
+  const char* headerTitle() const override;
+  void drawFooter() override;
 
-  size_t selectedIndex = 0;
   int serverIndex;
   WebDAVServer editServer;
   bool isNewServer = false;
@@ -34,4 +26,8 @@ class WebDAVSettingsActivity final : public Activity {
   int getMenuItemCount() const;
   void handleSelection();
   bool saveServer();
+
+  // Four editable fields plus Delete for an existing server; no heap allocation.
+  static constexpr int MAX_MENU_ITEMS = 5;
+  freeink::ui::ListItem fieldRowItems[MAX_MENU_ITEMS]{};
 };

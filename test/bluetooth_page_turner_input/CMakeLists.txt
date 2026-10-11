@@ -6,8 +6,11 @@ add_executable(BluetoothPageTurnerInputTest
 )
 
 target_include_directories(BluetoothPageTurnerInputTest PRIVATE
+  ${REPO_ROOT}/test/settings_stubs
   ${CMAKE_CURRENT_SOURCE_DIR}/stubs
   ${REPO_ROOT}/src
+  ${REPO_ROOT}/lib/Epub
+  ${REPO_ROOT}/lib/EpdFont
 )
 
 target_link_libraries(BluetoothPageTurnerInputTest PRIVATE

@@ -18,6 +18,7 @@ int findSingleUsableSavedNetwork(const std::vector<WifiNetworkInfo>& networks,
 
   for (size_t i = 0; i < networks.size(); i++) {
     const auto& network = networks[i];
+    if (network.isHiddenPlaceholder) continue;
     const auto* credential = findCredential(credentials, network.ssid);
     if (!credential || (network.isEncrypted && credential->password.empty())) continue;
 

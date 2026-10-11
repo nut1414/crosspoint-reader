@@ -1,4 +1,8 @@
 #pragma once
+
+#include <ArduinoJson.h>
+#include <PersistableStore.h>
+
 #include <string>
 #include <vector>
 
@@ -9,37 +13,25 @@ struct WebDAVServer {
   std::string password;  // Plaintext in memory; obfuscated with hardware key on disk
 };
 
-class WebDAVServerStore;
-namespace JsonSettingsIO {
-bool saveWebDAV(const WebDAVServerStore& store, const char* path);
-bool loadWebDAV(WebDAVServerStore& store, const char* json, bool* needsResave);
-}  // namespace JsonSettingsIO
-
 /**
  * Singleton class for storing WebDAV server configurations on the SD card.
  * Passwords are XOR-obfuscated with the device's unique hardware MAC address
  * and base64-encoded before writing to JSON.
  */
-class WebDAVServerStore {
+class WebDAVServerStore : public PersistableStore<WebDAVServerStore> {
  private:
-  static WebDAVServerStore instance;
   std::vector<WebDAVServer> servers;
 
   static constexpr size_t MAX_SERVERS = 8;
 
   WebDAVServerStore() = default;
 
-  friend bool JsonSettingsIO::saveWebDAV(const WebDAVServerStore&, const char*);
-  friend bool JsonSettingsIO::loadWebDAV(WebDAVServerStore&, const char*, bool*);
+  friend class PersistableStore<WebDAVServerStore>;
 
  public:
-  WebDAVServerStore(const WebDAVServerStore&) = delete;
-  WebDAVServerStore& operator=(const WebDAVServerStore&) = delete;
-
-  static WebDAVServerStore& getInstance() { return instance; }
-
-  bool saveToFile() const;
-  bool loadFromFile();
+  static const char* getFilePath() { return "/.crosspoint/webdav.json"; }
+  void toJson(JsonDocument& doc) const;
+  bool fromJson(JsonVariantConst doc);
 
   bool addServer(const WebDAVServer& server);
   bool updateServer(size_t index, const WebDAVServer& server);

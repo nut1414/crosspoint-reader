@@ -1,4 +1,7 @@
 #pragma once
+#include <ArduinoJson.h>
+#include <PersistableStore.h>
+
 #include <cstdint>
 #include <string>
 
@@ -15,36 +18,41 @@ constexpr KOReaderWifiConnectionMode normalizeKOReaderWifiConnectionMode(const u
   return static_cast<KOReaderWifiConnectionMode>(value);
 }
 
+// How manual "Sync Progress" resolves differences after fetching remote progress.
+enum class KOReaderSyncBehavior : uint8_t {
+  ASK_EVERY_TIME = 0,  // Preserve legacy behavior: always show Apply/Upload choices.
+  SMART = 1,           // Auto-resolve simple cases using furthest progress.
+};
+
 /**
  * Singleton class for storing KOReader sync credentials on the SD card.
  * Passwords are XOR-obfuscated with the device's unique hardware MAC address
  * and base64-encoded before writing to JSON (not cryptographically secure,
  * but prevents casual reading and ties credentials to the specific device).
  */
-class KOReaderCredentialStore {
+
+class KOReaderCredentialStore : public PersistableStore<KOReaderCredentialStore> {
  private:
-  static KOReaderCredentialStore instance;
   std::string username;
   std::string password;
   std::string serverUrl;                                            // Custom sync server URL (empty = default)
   DocumentMatchMethod matchMethod = DocumentMatchMethod::FILENAME;  // Default to filename for compatibility
+  bool sendMetadata = false;                                        // Send document metadata with progress sync
+  KOReaderSyncBehavior syncBehavior = KOReaderSyncBehavior::SMART;
   KOReaderWifiConnectionMode wifiConnectionMode = KOReaderWifiConnectionMode::SMART;
 
   // Private constructor for singleton
   KOReaderCredentialStore() = default;
+  ~KOReaderCredentialStore() = default;
 
   bool loadFromBinaryFile();
 
+  friend class PersistableStore<KOReaderCredentialStore>;
+
  public:
-  // Delete copy constructor and assignment
-  KOReaderCredentialStore(const KOReaderCredentialStore&) = delete;
-  KOReaderCredentialStore& operator=(const KOReaderCredentialStore&) = delete;
-
-  // Get singleton instance
-  static KOReaderCredentialStore& getInstance() { return instance; }
-
-  // Save/load from SD card
-  bool saveToFile() const;
+  static const char* getFilePath() { return "/.crosspoint/koreader.json"; }
+  void toJson(JsonDocument& doc) const;
+  bool fromJson(JsonVariantConst doc);
   bool loadFromFile();
 
   // Credential management
@@ -68,9 +76,20 @@ class KOReaderCredentialStore {
   // Get base URL for API calls (with http:// normalization if no protocol, falls back to default)
   std::string getBaseUrl() const;
 
+  // Whether API calls target the CrossPoint sync server that supports protocol extensions.
+  bool usesCrossPointSyncServer() const;
+
   // Document matching method
   void setMatchMethod(DocumentMatchMethod method);
   DocumentMatchMethod getMatchMethod() const { return matchMethod; }
+
+  // Send metadata setting
+  void setSendMetadata(bool enabled);
+  bool getSendMetadata() const { return sendMetadata; }
+
+  // Sync behavior
+  void setSyncBehavior(KOReaderSyncBehavior behavior);
+  KOReaderSyncBehavior getSyncBehavior() const { return syncBehavior; }
 
   // WiFi connection behavior used by progress sync
   void setWifiConnectionMode(KOReaderWifiConnectionMode mode);

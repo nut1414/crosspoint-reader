@@ -1,6 +1,5 @@
-#include <gtest/gtest.h>
-
 #include <HalStorage.h>
+#include <gtest/gtest.h>
 
 #include <string>
 #include <vector>
@@ -125,8 +124,9 @@ TEST_F(BookLogStoreTest, RoundTripsVersionedJson) {
 }
 
 TEST_F(BookLogStoreTest, IgnoresMalformedAndDuplicateRecords) {
-  Storage.setFile(BOOK_LOG_PATH,
-                  R"({"version":1,"books":[{"path":"/valid.epub","title":"Valid","author":"A"},{"title":"No path"},{"path":""},{"path":"/valid.epub","title":"Duplicate"},{"path":"/fallback.txt"}]})");
+  Storage.setFile(
+      BOOK_LOG_PATH,
+      R"({"version":1,"books":[{"path":"/valid.epub","title":"Valid","author":"A"},{"title":"No path"},{"path":""},{"path":"/valid.epub","title":"Duplicate"},{"path":"/fallback.txt"}]})");
 
   BookLogStore store;
   EXPECT_TRUE(store.loadFromFile());

@@ -1,27 +1,29 @@
 #pragma once
 
-#include "activities/Activity.h"
-#include "util/ButtonNavigator.h"
+#include <array>
+#include <cstddef>
+
+#include "activities/UiListActivity.h"
 
 /**
- * Activity showing the list of configured WebDAV servers.
- * Allows adding new servers and editing/deleting existing ones.
- * When pickerMode is true, selecting a server navigates to the WebDAV browser
- * instead of opening the editor (used from the home screen).
+ * Activity showing configured WebDAV servers.
+ * Picker mode opens a server browser; settings mode also allows adding servers.
  */
-class WebDAVServerListActivity final : public Activity {
+class WebDAVServerListActivity final : public UiListActivity {
  public:
-  explicit WebDAVServerListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool pickerMode = false)
-      : Activity("WebDAVServerList", renderer, mappedInput), pickerMode(pickerMode) {}
+  explicit WebDAVServerListActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool pickerMode = false);
 
   void onEnter() override;
-  void onExit() override;
-  void loop() override;
-  void render(RenderLock&&) override;
 
  private:
-  ButtonNavigator buttonNavigator;
-  int selectedIndex = 0;
+  int listCount() const override { return getItemCount(); }
+  void buildScreen(UiScreen& screen) override;
+  void activateIndex(int index) override;
+  void onBackButton() override;
+  const char* headerTitle() const override;
+
+  static constexpr std::size_t MAX_ROW_ITEMS = 9;  // Eight servers plus Add Server.
+  std::array<freeink::ui::ListItem, MAX_ROW_ITEMS> rowItems_{};
   bool pickerMode = false;
 
   int getItemCount() const;

@@ -8,16 +8,19 @@
 
 #include "activities/Activity.h"
 #include "activities/network/WifiSelectionPolicy.h"
+#include "components/UiAppHost.h"
 #include "util/ButtonNavigator.h"
 
 struct Rect;
 struct ThemeMetrics;
+struct WifiCredential;
 
 // WiFi selection states
 enum class WifiSelectionState {
   AUTO_CONNECTING,    // Trying to connect to the last known network
   SCANNING,           // Scanning for networks
   NETWORK_LIST,       // Displaying available networks
+  HIDDEN_SSID_ENTRY,  // Entering SSID for a hidden network
   PASSWORD_ENTRY,     // Entering password for selected network
   CONNECTING,         // Attempting to connect
   CONNECTED,          // Successfully connected
@@ -37,12 +40,22 @@ enum class WifiSelectionState {
  *
  * The onComplete callback receives true if connected successfully, false if cancelled.
  */
-class WifiSelectionActivity final : public Activity {
+class WifiSelectionActivity final : public Activity, private UiAppHost {
   ButtonNavigator buttonNavigator;
 
   WifiSelectionState state = WifiSelectionState::SCANNING;
   size_t selectedNetworkIndex = 0;
   std::vector<WifiNetworkInfo> networks;
+  // Number of real (scanned) networks, excluding the synthetic hidden-network entry
+  size_t realNetworkCount = 0;
+
+  // Row buffers derived from `networks`, rebuilt only when it changes
+  // (processWifiScanResults()) instead of on every repaint — buildListScreen()
+  // used to re-derive a "+ * ||||" status string per network on every render
+  // (cursor move, tap flash, ...).
+  std::vector<std::string> networkStatuses;
+  std::vector<freeink::ui::ListItem> networkRowItems;
+  void rebuildNetworkRowItems();
 
   // Selected network for connection
   std::string selectedSSID;
@@ -64,8 +77,11 @@ class WifiSelectionActivity final : public Activity {
   // Connection behavior to use when entering the selector
   const WifiConnectionPolicy connectionPolicy;
 
-  // Whether we are attempting to auto-connect
+  // Whether we are attempting to auto-connect or auto-scan saved networks.
   bool autoConnecting = false;
+
+  // True from the Confirm press that stops auto-connect until that button is released.
+  bool manualNetworkListRequested = false;
 
   // Save/forget prompt selection (0 = Yes, 1 = No)
   int savePromptSelection = 0;
@@ -73,32 +89,50 @@ class WifiSelectionActivity final : public Activity {
 
   // Connection timeout
   static constexpr unsigned long CONNECTION_TIMEOUT_MS = 15000;
+  static constexpr unsigned long AUTO_CONNECTION_TIMEOUT_MS = 7000;
   unsigned long connectionStartTime = 0;
 
-  void renderNetworkList(const Rect* screen, const ThemeMetrics* metrics) const;
+  // The UiAppHost app hosts the network list and the save/forget prompts
+  // (themed rows and dialogs, touch routing); every other state keeps its
+  // legacy centered-text rendering.
+  // Viewport memory (top/visibleRows) for the network list; `selected` is
+  // mirrored from selectedNetworkIndex at build/move time.
+  freeink::ui::ListNav listNav;
+
+  static void listScreen(UiScreen& screen, void* user);
+  static void onRowEvent(const freeink::ui::ActionEvent& event, void* user);
+  static void onScanEvent(const freeink::ui::ActionEvent& event, void* user);
+  static void onPromptEvent(const freeink::ui::ActionEvent& event, void* user);
+  void buildListScreen(UiScreen& screen);
+  void buildPromptDialog(UiScreen& screen);
+
+  void renderNetworkList(const Rect* screen, const ThemeMetrics* metrics);
   void renderPasswordEntry(const Rect* screen, const ThemeMetrics* metrics) const;
   void renderConnecting(const Rect* screen, const ThemeMetrics* metrics) const;
   void renderConnected(const Rect* screen, const ThemeMetrics* metrics) const;
-  void renderSavePrompt(const Rect* screen, const ThemeMetrics* metrics) const;
   void renderConnectionFailed(const Rect* screen, const ThemeMetrics* metrics) const;
-  void renderForgetPrompt(const Rect* screen, const ThemeMetrics* metrics) const;
 
-  void startWifiScan();
+  void startWifiScan(bool autoScan = false);
   void processWifiScanResults();
+  void appendHiddenNetworkEntry();
   void selectNetwork(int index);
-  void autoConnectSavedNetwork(int index);
+  void promptHiddenSsid();
+  void promptPasswordEntry();
   void attemptConnection();
   void checkConnectionStatus();
-  std::string getSignalStrengthIndicator(int32_t rssi) const;
+  bool tryAutoConnectCredential(const WifiCredential& cred, bool requiresPassword);
+  void handleAutoConnectFailure();
+  void showNetworkListFromAutoConnect();
+  static std::string getSignalStrengthIndicator(int32_t rssi);
 
   void onComplete(bool connected);
 
  public:
   explicit WifiSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                                 WifiConnectionPolicy policy = WifiConnectionPolicy::AUTO_CONNECT_LAST)
-      : Activity("WifiSelection", renderer, mappedInput), connectionPolicy(policy) {}
+                                 WifiConnectionPolicy policy = WifiConnectionPolicy::AUTO_CONNECT_LAST);
   void onEnter() override;
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  bool preventAutoSleep() override { return true; }
 };

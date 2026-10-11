@@ -166,8 +166,7 @@ void WebDAVBrowserActivity::render(RenderLock&&) {
     return;
   }
 
-  const char* confirmLabel =
-      items.empty() ? "" : (items[selectorIndex].isDirectory ? tr(STR_OPEN) : tr(STR_DOWNLOAD));
+  const char* confirmLabel = items.empty() ? "" : (items[selectorIndex].isDirectory ? tr(STR_OPEN) : tr(STR_DOWNLOAD));
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
 
   if (truncated) {

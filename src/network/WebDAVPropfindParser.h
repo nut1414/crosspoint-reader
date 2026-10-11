@@ -1,17 +1,16 @@
 #pragma once
 
+#include <expat.h>
+
 #include <cstddef>
 #include <string>
-
-#include <expat.h>
 
 #include "network/WebDAVItemList.h"
 #include "network/WebDAVTypes.h"
 
 class WebDAVPropfindParser {
  public:
-  explicit WebDAVPropfindParser(WebDAVItemList& output,
-                                size_t maxItems = WebDAVItemList::MAX_ITEMS);
+  explicit WebDAVPropfindParser(WebDAVItemList& output, size_t maxItems = WebDAVItemList::MAX_ITEMS);
   ~WebDAVPropfindParser();
 
   WebDAVPropfindParser(const WebDAVPropfindParser&) = delete;

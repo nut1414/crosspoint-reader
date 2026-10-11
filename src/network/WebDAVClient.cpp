@@ -78,8 +78,7 @@ SpoolResult spoolResponseBody(WebDAVHTTPClient& http, HalFile& output) {
   const bool chunked = http.responseIsChunked();
   int remaining = chunked ? -1 : http.getSize();
   if (!chunked && remaining == 0) return SpoolResult::INVALID_RESPONSE;
-  LOG_DBG("WEBDAV", "PROPFIND response framing=%s length=%d", chunked ? "chunked" : "identity",
-          http.getSize());
+  LOG_DBG("WEBDAV", "PROPFIND response framing=%s length=%d", chunked ? "chunked" : "identity", http.getSize());
 
   size_t total = 0;
   uint32_t lastDataAt = millis();
@@ -129,8 +128,7 @@ SpoolResult spoolResponseBody(WebDAVHTTPClient& http, HalFile& output) {
               }
             }
           }
-          const SpoolResult writeResult =
-              writeResponseBytes(output, buffer, bodySize, total);
+          const SpoolResult writeResult = writeResponseBytes(output, buffer, bodySize, total);
           if (writeResult != SpoolResult::OK) return writeResult;
           if (documentComplete) return SpoolResult::OK;
           if (remaining > 0) remaining -= bytesRead;
@@ -148,8 +146,8 @@ SpoolResult spoolResponseBody(WebDAVHTTPClient& http, HalFile& output) {
   }
 }
 
-SpoolAttemptResult spoolPropfindResponse(const std::string& requestUrl, const bool useTls,
-                                         const std::string& username, const std::string& password) {
+SpoolAttemptResult spoolPropfindResponse(const std::string& requestUrl, const bool useTls, const std::string& username,
+                                         const std::string& password) {
   if (Storage.exists(RESPONSE_TEMP_PATH)) Storage.remove(RESPONSE_TEMP_PATH);
 
   std::unique_ptr<NetworkClient> client;
@@ -192,7 +190,7 @@ SpoolAttemptResult spoolPropfindResponse(const std::string& requestUrl, const bo
     http.addHeader("Authorization", "Basic " + encoded);
   }
 
-  const char* propfindBody =
+  char propfindBody[] =
       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
       "<propfind xmlns=\"DAV:\">"
       "<prop>"
@@ -201,7 +199,7 @@ SpoolAttemptResult spoolPropfindResponse(const std::string& requestUrl, const bo
       "</prop>"
       "</propfind>";
 
-  const int httpCode = http.sendRequest("PROPFIND", (uint8_t*)propfindBody, strlen(propfindBody));
+  const int httpCode = http.sendRequest("PROPFIND", reinterpret_cast<uint8_t*>(propfindBody), strlen(propfindBody));
   if (httpCode != HTTP_CODE_MULTI_STATUS) {
     const String status = httpCode < 0 ? HTTPClient::errorToString(httpCode) : String("HTTP status");
     LOG_ERR("WEBDAV", "PROPFIND failed: %d (%s) url=%s", httpCode, status.c_str(), requestUrl.c_str());
@@ -262,9 +260,8 @@ SpoolAttemptResult spoolPropfindResponse(const std::string& requestUrl, const bo
 
 }  // namespace
 
-WebDAVError WebDAVClient::propfind(const std::string& url, WebDAVItemList& out,
-                                   const std::string& username, const std::string& password,
-                                   bool* truncated, const std::string& baseUrl) {
+WebDAVError WebDAVClient::propfind(const std::string& url, WebDAVItemList& out, const std::string& username,
+                                   const std::string& password, bool* truncated, const std::string& baseUrl) {
   // Copy the URL before clearing output so callers cannot invalidate an aliased
   // item href. The browser passes separate fields, but the public API need not.
   const std::string requestUrl = UrlUtils::ensureProtocol(url);
@@ -280,8 +277,7 @@ WebDAVError WebDAVClient::propfind(const std::string& url, WebDAVItemList& out,
     requestError = result.error;
     if (requestError == WebDAVError::OK) break;
     if (!result.retryable || attempt + 1 == REQUEST_ATTEMPTS) return requestError;
-    LOG_INF("WEBDAV", "Retrying PROPFIND after transient failure (attempt %zu/%zu)", attempt + 2,
-            REQUEST_ATTEMPTS);
+    LOG_INF("WEBDAV", "Retrying PROPFIND after transient failure (attempt %zu/%zu)", attempt + 2, REQUEST_ATTEMPTS);
     delay(REQUEST_RETRY_DELAY_MS);
   }
   if (requestError != WebDAVError::OK) return requestError;
@@ -342,8 +338,7 @@ WebDAVError WebDAVClient::propfind(const std::string& url, WebDAVItemList& out,
   }
   if (truncated) *truncated = parser.truncated;
   WebDAVUrl::resolveItems(baseUrl.empty() ? requestUrl : baseUrl, requestUrl, out);
-  LOG_DBG("WEBDAV", "PROPFIND %zu items%s", out.size(),
-          parser.truncated ? " (truncated at MAX_ITEMS)" : "");
+  LOG_DBG("WEBDAV", "PROPFIND %zu items%s", out.size(), parser.truncated ? " (truncated at MAX_ITEMS)" : "");
   return WebDAVError::OK;
 }
 

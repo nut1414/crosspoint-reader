@@ -1,13 +1,13 @@
 #pragma once
 
 #include <I18n.h>
+
 #include <string>
 #include <vector>
 
-#include "../Activity.h"
-#include "util/ButtonNavigator.h"
+#include "activities/UiListActivity.h"
 
-class FileActionMenuActivity final : public Activity {
+class FileActionMenuActivity final : public UiListActivity {
  public:
   enum class Action { Rename, Move, Delete };
 
@@ -15,9 +15,6 @@ class FileActionMenuActivity final : public Activity {
                                   bool isDirectory);
 
   void onEnter() override;
-  void onExit() override;
-  void loop() override;
-  void render(RenderLock&&) override;
 
  private:
   struct MenuItem {
@@ -27,7 +24,12 @@ class FileActionMenuActivity final : public Activity {
 
   std::string itemName;
   bool isDirectory;
-  int selectedIndex = 0;
-  ButtonNavigator buttonNavigator;
   std::vector<MenuItem> menuItems;
+  freeink::ui::ListItem rowItems[3]{};
+
+  int listCount() const override { return static_cast<int>(menuItems.size()); }
+  void buildScreen(UiScreen& screen) override;
+  void activateIndex(int index) override;
+  void onBackButton() override;
+  const char* headerTitle() const override;
 };

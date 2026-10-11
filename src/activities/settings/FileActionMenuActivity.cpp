@@ -5,11 +5,12 @@
 
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
-#include "fontIds.h"
+
+namespace fui = freeink::ui;
 
 FileActionMenuActivity::FileActionMenuActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                                const std::string& itemName, bool isDirectory)
-    : Activity("FileActionMenu", renderer, mappedInput), itemName(itemName), isDirectory(isDirectory) {
+    : UiListActivity("FileActionMenu", renderer, mappedInput), itemName(itemName), isDirectory(isDirectory) {
   menuItems.reserve(3);
   menuItems.push_back({Action::Rename, StrId::STR_RENAME});
   menuItems.push_back({Action::Move, StrId::STR_MOVE});
@@ -17,59 +18,42 @@ FileActionMenuActivity::FileActionMenuActivity(GfxRenderer& renderer, MappedInpu
 }
 
 void FileActionMenuActivity::onEnter() {
-  Activity::onEnter();
-  selectedIndex = 0;
-  requestUpdate();
-}
-
-void FileActionMenuActivity::onExit() { Activity::onExit(); }
-
-void FileActionMenuActivity::loop() {
-  buttonNavigator.onNext([this] {
-    selectedIndex = ButtonNavigator::nextIndex(selectedIndex, static_cast<int>(menuItems.size()));
-    requestUpdate();
-  });
-
-  buttonNavigator.onPrevious([this] {
-    selectedIndex = ButtonNavigator::previousIndex(selectedIndex, static_cast<int>(menuItems.size()));
-    requestUpdate();
-  });
-
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    setResult(MenuResult{static_cast<int>(menuItems[selectedIndex].action)});
-    finish();
-    return;
-  }
-
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-    ActivityResult result;
-    result.isCancelled = true;
-    setResult(std::move(result));
-    finish();
-    return;
+  RenderLock lock(*this);
+  UiListActivity::onEnter();
+  for (size_t i = 0; i < menuItems.size(); ++i) {
+    rowItems[i].label = I18N.get(menuItems[i].labelId);
+    rowItems[i].actionValue = static_cast<int16_t>(i);
   }
 }
 
-void FileActionMenuActivity::render(RenderLock&&) {
-  renderer.clearScreen();
+const char* FileActionMenuActivity::headerTitle() const { return itemName.c_str(); }
 
-  const auto pageWidth = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
+void FileActionMenuActivity::activateIndex(const int index) {
+  if (index < 0 || index >= listCount()) return;
+  nav.selected = index;
+  app.clearTapFlash();
+  setResult(MenuResult{static_cast<int>(menuItems[static_cast<size_t>(index)].action)});
+  finish();
+}
+
+void FileActionMenuActivity::onBackButton() {
+  ActivityResult result;
+  result.isCancelled = true;
+  setResult(std::move(result));
+  finish();
+}
+
+void FileActionMenuActivity::buildScreen(UiScreen& screen) {
   const auto& metrics = UITheme::getInstance().getMetrics();
+  screen.setContentMarginFromScreen(fui::Insets{static_cast<int16_t>(metrics.topPadding + metrics.headerHeight), 0,
+                                                static_cast<int16_t>(metrics.buttonHintsHeight), 0});
+  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, itemName.c_str());
-
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
-  const int contentHeight =
-      pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
-
-  GUI.drawList(renderer, Rect{0, contentTop, pageWidth, contentHeight}, static_cast<int>(menuItems.size()),
-               selectedIndex,
-               [this](int index) { return std::string(I18N.get(menuItems[index].labelId)); }, nullptr, nullptr, nullptr,
-               true);
-
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
-  GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
-
-  renderer.displayBuffer();
+  fui::ListProps props;
+  props.items = rowItems;
+  props.count = static_cast<uint16_t>(menuItems.size());
+  props.action = ACTION_ROW;
+  props.inputMask = fui::InputTouch;  // buttons use UiListActivity navigation
+  syncListViewport(screen, props);
+  screen.list(props);
 }

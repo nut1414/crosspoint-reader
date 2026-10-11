@@ -19,9 +19,9 @@ class WebDAVClient {
    * @param baseUrl Configured WebDAV collection root used to normalize returned hrefs
    * @return WebDAVError::OK on success
    */
-  static WebDAVError propfind(const std::string& url, WebDAVItemList& out,
-                              const std::string& username = "", const std::string& password = "",
-                              bool* truncated = nullptr, const std::string& baseUrl = "");
+  static WebDAVError propfind(const std::string& url, WebDAVItemList& out, const std::string& username = "",
+                              const std::string& password = "", bool* truncated = nullptr,
+                              const std::string& baseUrl = "");
 
   /**
    * Download a file from the WebDAV server.
@@ -34,6 +34,6 @@ class WebDAVClient {
    * @return WebDAVError::OK on success
    */
   static WebDAVError downloadFile(const std::string& url, const std::string& destPath,
-                                  HttpDownloader::ProgressCallback progress = nullptr,
-                                  const std::string& username = "", const std::string& password = "");
+                                  HttpDownloader::ProgressCallback progress = nullptr, const std::string& username = "",
+                                  const std::string& password = "");
 };
